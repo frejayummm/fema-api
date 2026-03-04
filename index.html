@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>DMV Disaster Risk — County Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:#1b1b1b;color:#e8e4df;height:100vh;overflow:hidden}
+#app{display:flex;height:100vh;flex-direction:column}
+
+/* Header */
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 22px;
+  background:#1b1b1b;border-bottom:1px solid #333;z-index:1000;flex-shrink:0}
+.hdr-left{display:flex;align-items:center;gap:14px}
+.hdr-left h1{font-family:'Playfair Display',serif;font-size:18px;color:#f5f0e8;letter-spacing:-0.01em}
+.hdr-left p{font-size:9.5px;color:#888;text-transform:uppercase;letter-spacing:0.08em;font-weight:500}
+.hdr-right{display:flex;gap:8px;align-items:center}
+.hdr-badge{padding:4px 12px;border-radius:5px;font-size:10px;font-weight:600;
+  background:#2a2a2a;border:1px solid #444;color:#aaa;font-family:'JetBrains Mono',monospace}
+
+/* Main layout */
+.main-row{display:flex;flex:1;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:260px;min-width:260px;border-right:1px solid #333;padding:18px 16px;
+  display:flex;flex-direction:column;gap:15px;background:#1f1f1f;overflow-y:auto;flex-shrink:0}
+.sec-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;color:#777;margin-bottom:-4px}
+.field label{display:block;font-size:10.5px;font-weight:500;color:#aaa;margin-bottom:4px}
+.field select{width:100%;padding:7px 10px;border-radius:5px;font-size:12px;
+  background:#2a2a2a;color:#ddd;border:1px solid #444;outline:none;cursor:pointer;font-family:inherit}
+.field input[type=range]{width:100%;accent-color:#c9a96e;cursor:pointer;margin-top:2px}
+.range-lab{display:flex;justify-content:space-between;font-size:8.5px;color:#666;margin-top:2px}
+.season-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.season-btn{padding:6px 0;border-radius:5px;font-size:11px;font-weight:500;cursor:pointer;
+  border:1px solid #444;background:transparent;color:#888;transition:all 0.15s;font-family:inherit}
+.season-btn.active{border-color:#c9a96e;background:rgba(201,169,110,0.1);color:#dcc088}
+
+/* Legend */
+.legend{border-top:1px solid #333;padding-top:14px}
+.leg-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}
+.leg-circ{width:16px;height:16px;border-radius:50%;flex-shrink:0;border:2px solid rgba(0,0,0,0.3)}
+.leg-name{color:#ccc;font-weight:500}
+.leg-range{color:#666;font-family:'JetBrains Mono',monospace;font-size:9.5px;margin-left:auto}
+
+/* KPI strip */
+.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 18px;
+  background:#1b1b1b;border-bottom:1px solid #333;flex-shrink:0}
+.kpi{background:#242424;border-radius:7px;padding:10px 12px;border:1px solid #333}
+.kpi-label{font-size:8.5px;color:#777;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:4px}
+.kpi-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:#f5f0e8;line-height:1}
+.kpi-sub{font-size:10px;color:#666;font-weight:400;margin-left:3px}
+
+/* Hover panel */
+.hover-panel{margin-top:auto;padding:14px;border-radius:8px;transition:all 0.2s}
+.hp-name{font-size:14px;font-weight:700;color:#f5f0e8;font-family:'Playfair Display',serif}
+.hp-sub{font-size:10px;color:#999;margin-bottom:8px}
+.hp-row{display:flex;justify-content:space-between;align-items:baseline}
+.hp-score{font-size:30px;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1}
+.hp-badge{font-size:10px;font-weight:600;padding:3px 10px;border-radius:4px}
+.info-box{margin-top:auto;padding:12px;border-radius:7px;background:#24242480;border:1px solid #33333380;
+  font-size:10px;color:#666;line-height:1.5}
+
+/* Map */
+.map-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#map-wrap{flex:1;margin:0;position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+
+/* Leaflet overrides for light terrain look */
+.leaflet-control-zoom a{background:#2a2a2a!important;color:#aaa!important;border-color:#444!important}
+.leaflet-control-attribution{font-size:8px!important;background:rgba(27,27,27,0.8)!important;color:#666!important}
+.leaflet-control-attribution a{color:#888!important}
+
+/* Custom labels on the map */
+.county-label{
+  background:none!important;border:none!important;box-shadow:none!important;
+  font-family:'IBM Plex Sans',sans-serif!important;font-weight:600!important;
+  color:#4a4a4a!important;font-size:11px!important;text-transform:uppercase!important;
+  letter-spacing:0.06em!important;white-space:nowrap!important;
+  text-shadow:1px 1px 0 rgba(255,255,255,0.7),-1px -1px 0 rgba(255,255,255,0.7),
+    1px -1px 0 rgba(255,255,255,0.7),-1px 1px 0 rgba(255,255,255,0.7)!important;
+}
+.county-label-small{
+  background:none!important;border:none!important;box-shadow:none!important;
+  font-family:'IBM Plex Sans',sans-serif!important;font-weight:500!important;
+  color:#6a6a6a!important;font-size:9px!important;text-transform:uppercase!important;
+  letter-spacing:0.04em!important;white-space:nowrap!important;
+  text-shadow:1px 1px 0 rgba(255,255,255,0.6),-1px -1px 0 rgba(255,255,255,0.6),
+    1px -1px 0 rgba(255,255,255,0.6),-1px 1px 0 rgba(255,255,255,0.6)!important;
+}
+.state-label{
+  background:none!important;border:none!important;box-shadow:none!important;
+  font-family:'IBM Plex Sans',sans-serif!important;font-weight:700!important;
+  color:#3a3a3a!important;font-size:14px!important;text-transform:uppercase!important;
+  letter-spacing:0.14em!important;white-space:nowrap!important;
+  text-shadow:1px 1px 0 rgba(255,255,255,0.8),-1px -1px 0 rgba(255,255,255,0.8),
+    1px -1px 0 rgba(255,255,255,0.8),-1px 1px 0 rgba(255,255,255,0.8)!important;
+}
+
+/* Tooltip on hover */
+.risk-tip{
+  background:#1f1f1f!important;border:1px solid #444!important;color:#e8e4df!important;
+  border-radius:6px!important;padding:10px 14px!important;font-family:'IBM Plex Sans',sans-serif!important;
+  font-size:12px!important;box-shadow:0 6px 24px rgba(0,0,0,0.6)!important;
+}
+.risk-tip .tn{font-weight:700;font-size:13px;margin-bottom:2px}
+.risk-tip .ts{color:#888;font-size:10px;margin-bottom:5px}
+.risk-tip .tv{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:18px}
+.risk-tip .tl{font-size:10px;font-weight:600;margin-left:6px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="hdr-left">
+      <div>
+        <h1>DMV Disaster Risk Prediction</h1>
+        <p>County-Level Cartographic View · DC, Maryland, Virginia</p>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <span class="hdr-badge">30 COUNTIES</span>
+      <span class="hdr-badge">DEMO</span>
+    </div>
+  </header>
+
+  <div class="kpi-strip">
+    <div class="kpi" style="border-left:3px solid #c0392b"><div class="kpi-label">Counties High+ Risk</div><div class="kpi-val" id="k1">—</div></div>
+    <div class="kpi" style="border-left:3px solid #e67e22"><div class="kpi-label">Avg Risk Score</div><div class="kpi-val" id="k2">—</div></div>
+    <div class="kpi" style="border-left:3px solid #f1c40f"><div class="kpi-label">Population Exposed</div><div class="kpi-val" id="k3">—</div></div>
+    <div class="kpi" style="border-left:3px solid #c9a96e"><div class="kpi-label">Highest Risk</div><div class="kpi-val" id="k4">—</div></div>
+  </div>
+
+  <div class="main-row">
+    <aside class="sidebar">
+      <div class="sec-label">Model Parameters</div>
+      <div class="field">
+        <label>Disaster Type</label>
+        <select id="inType"><option>Flood</option><option>Hurricane</option><option>Winter Storm</option><option>Tornado</option><option>Earthquake</option></select>
+      </div>
+      <div class="field">
+        <label id="sevLab">Severity — Level 3</label>
+        <input type="range" id="inSev" min="1" max="5" value="3"/>
+        <div class="range-lab"><span>Minor</span><span>Catastrophic</span></div>
+      </div>
+      <div class="field">
+        <label>Forecast Horizon</label>
+        <select id="inHor"><option>30 days</option><option selected>90 days</option><option>6 months</option><option>1 year</option></select>
+      </div>
+      <div class="field">
+        <label>Season</label>
+        <div class="season-grid" id="sSel">
+          <button class="season-btn active" data-s="Spring">Spring</button>
+          <button class="season-btn" data-s="Summer">Summer</button>
+          <button class="season-btn" data-s="Fall">Fall</button>
+          <button class="season-btn" data-s="Winter">Winter</button>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="sec-label" style="margin-bottom:10px">Risk Legend</div>
+        <div class="leg-row"><span class="leg-circ" style="background:#22c55e"></span><span class="leg-name">Minimal</span><span class="leg-range">0 – 14</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#84cc16"></span><span class="leg-name">Low</span><span class="leg-range">15 – 29</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#eab308"></span><span class="leg-name">Moderate</span><span class="leg-range">30 – 49</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#e67e22"></span><span class="leg-name">High</span><span class="leg-range">50 – 69</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#c0392b"></span><span class="leg-name">Critical</span><span class="leg-range">70 – 100</span></div>
+      </div>
+
+      <div id="hPanel" class="info-box">ⓘ Hover over county markers on the map to see risk scores. This is a simulated demo with mock risk data.</div>
+    </aside>
+
+    <div class="map-area">
+      <div id="map-wrap"><div id="map"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// County data with approximate polygon boundaries
+// ═══════════════════════════════════════════════════════════════
+const C = [
+  {id:"11001",nm:"District of\nColumbia",short:"DC",st:"DC",lat:38.9072,lng:-77.0369,pop:690,
+   poly:[[38.9958,-77.0412],[38.9940,-76.9094],[38.8271,-76.9117],[38.7916,-77.0389],[38.8954,-77.0410],[38.9345,-77.0390]]},
+
+  {id:"24031",nm:"Montgomery",short:"MNTGMRY",st:"MD",lat:39.1380,lng:-77.2175,pop:1063,
+   poly:[[39.3500,-77.3300],[39.3500,-77.0300],[39.2200,-77.0000],[39.1400,-76.9500],[39.0500,-76.9800],[38.9958,-77.0412],[38.9800,-77.0700],[38.9900,-77.2400],[39.0600,-77.2800]]},
+  {id:"24033",nm:"Prince\nGeorge's",short:"PG",st:"MD",lat:38.8296,lng:-76.8472,pop:968,
+   poly:[[39.0500,-76.9800],[39.0500,-76.8400],[38.9700,-76.7500],[38.8400,-76.7200],[38.7900,-76.8000],[38.7500,-76.8800],[38.7600,-76.9500],[38.8271,-76.9117],[38.9940,-76.9094],[38.9958,-77.0412]]},
+  {id:"24003",nm:"Anne\nArundel",short:"ANNEARNDL",st:"MD",lat:38.9529,lng:-76.5488,pop:589,
+   poly:[[39.1400,-76.6500],[39.1400,-76.4800],[39.0200,-76.4000],[38.8800,-76.4200],[38.8300,-76.5400],[38.8600,-76.6600],[38.9200,-76.7200],[39.0500,-76.7500],[39.0500,-76.8400]]},
+  {id:"24027",nm:"Howard",short:"HOWARD",st:"MD",lat:39.2037,lng:-76.9311,pop:328,
+   poly:[[39.3500,-76.9500],[39.3200,-76.8000],[39.1800,-76.7000],[39.1400,-76.6500],[39.0500,-76.8400],[39.0500,-76.9800],[39.1400,-76.9500],[39.2200,-77.0000]]},
+  {id:"24021",nm:"Frederick",short:"FRED",st:"MD",lat:39.4143,lng:-77.4105,pop:272,
+   poly:[[39.7200,-77.4600],[39.7200,-77.1600],[39.5600,-77.0500],[39.4500,-77.0000],[39.3500,-77.0300],[39.3500,-77.3300],[39.3800,-77.3800],[39.4200,-77.4600]]},
+  {id:"24017",nm:"Charles",short:"CHARLES",st:"MD",lat:38.4754,lng:-76.9780,pop:167,
+   poly:[[38.7600,-76.9500],[38.7500,-76.8800],[38.6600,-76.8200],[38.5200,-76.8400],[38.4000,-76.9300],[38.3800,-77.0000],[38.4800,-77.0500],[38.6000,-77.0200],[38.7000,-77.0000]]},
+  {id:"24009",nm:"Calvert",short:"CALVERT",st:"MD",lat:38.5347,lng:-76.5282,pop:93,
+   poly:[[38.6600,-76.5800],[38.6600,-76.4500],[38.5200,-76.3800],[38.3800,-76.4200],[38.3500,-76.5600],[38.4200,-76.6200],[38.5200,-76.6800]]},
+  {id:"24037",nm:"St. Mary's",short:"STMARYS",st:"MD",lat:38.2137,lng:-76.5345,pop:114,
+   poly:[[38.4200,-76.6200],[38.3500,-76.5600],[38.2800,-76.4000],[38.1400,-76.3500],[38.1000,-76.5200],[38.1500,-76.6500],[38.2500,-76.6800],[38.3500,-76.6500]]},
+  {id:"24005",nm:"Baltimore\nCounty",short:"BALTCO",st:"MD",lat:39.4100,lng:-76.6105,pop:855,
+   poly:[[39.5200,-76.7800],[39.5200,-76.5200],[39.3800,-76.4500],[39.3200,-76.5400],[39.2200,-76.5800],[39.1800,-76.7000],[39.3200,-76.8000],[39.3500,-76.9500],[39.4500,-76.8700]]},
+  {id:"24510",nm:"Baltimore\nCity",short:"BALT",st:"MD",lat:39.2904,lng:-76.6122,pop:586,
+   poly:[[39.3500,-76.6800],[39.3500,-76.5600],[39.2800,-76.5400],[39.2500,-76.5800],[39.2500,-76.6500],[39.2800,-76.7000]]},
+  {id:"24013",nm:"Carroll",short:"CARROLL",st:"MD",lat:39.5628,lng:-77.0120,pop:172,
+   poly:[[39.7200,-77.1600],[39.7200,-76.9200],[39.5600,-76.8400],[39.4500,-76.8700],[39.3500,-76.9500],[39.4500,-77.0000],[39.5600,-77.0500]]},
+  {id:"24025",nm:"Harford",short:"HARFORD",st:"MD",lat:39.5362,lng:-76.2989,pop:261,
+   poly:[[39.7200,-76.5200],[39.7200,-76.2400],[39.6000,-76.0800],[39.4700,-76.1200],[39.3800,-76.2200],[39.3800,-76.4500],[39.5200,-76.5200]]},
+  {id:"24043",nm:"Washington\nCounty",short:"WASHCO",st:"MD",lat:39.6018,lng:-77.8200,pop:155,
+   poly:[[39.7200,-77.8800],[39.7200,-77.4600],[39.4200,-77.4600],[39.3800,-77.5800],[39.4600,-77.6600],[39.5700,-77.7200],[39.5800,-77.8800]]},
+  {id:"24035",nm:"Queen\nAnne's",short:"QANNES",st:"MD",lat:39.0379,lng:-76.0851,pop:50,
+   poly:[[39.2200,-76.1000],[39.2200,-75.9200],[39.0800,-75.8600],[38.9500,-75.9600],[38.9500,-76.1000],[39.0800,-76.1500]]},
+
+  // Virginia
+  {id:"51059",nm:"Fairfax\nCounty",short:"FAIRFAX",st:"VA",lat:38.8462,lng:-77.3064,pop:1151,
+   poly:[[38.9400,-77.2500],[38.9200,-77.1000],[38.8954,-77.0410],[38.7916,-77.0389],[38.7200,-77.1400],[38.6800,-77.2300],[38.7000,-77.3200],[38.7600,-77.3600],[38.8200,-77.3200],[38.8800,-77.2800]]},
+  {id:"51013",nm:"Arlington",short:"ARLINGTON",st:"VA",lat:38.8799,lng:-77.1068,pop:239,
+   poly:[[38.9200,-77.1000],[38.9000,-77.0320],[38.8500,-77.0180],[38.8350,-77.0520],[38.8500,-77.0900],[38.8700,-77.1250]]},
+  {id:"51107",nm:"Loudoun",short:"LOUDOUN",st:"VA",lat:39.0768,lng:-77.6385,pop:421,
+   poly:[[39.3200,-77.6500],[39.3200,-77.3300],[39.0600,-77.2800],[38.9900,-77.2400],[38.9200,-77.2800],[38.8800,-77.3600],[38.8800,-77.5400],[38.9500,-77.6000],[39.0800,-77.6800],[39.2200,-77.6800]]},
+  {id:"51153",nm:"Prince\nWilliam",short:"PRWM",st:"VA",lat:38.6881,lng:-77.4742,pop:483,
+   poly:[[38.8200,-77.3200],[38.7600,-77.3600],[38.7000,-77.3200],[38.6500,-77.3300],[38.5800,-77.3500],[38.5600,-77.4500],[38.5800,-77.5400],[38.6500,-77.5600],[38.7200,-77.5200],[38.7800,-77.4600],[38.8200,-77.3800]]},
+  {id:"51179",nm:"Stafford",short:"STAFFORD",st:"VA",lat:38.4220,lng:-77.4083,pop:154,
+   poly:[[38.5800,-77.3500],[38.5600,-77.4500],[38.4800,-77.4600],[38.3500,-77.3800],[38.3000,-77.4200],[38.3200,-77.5400],[38.4200,-77.5400],[38.5200,-77.5000]]},
+  {id:"51061",nm:"Fauquier",short:"FAUQUIER",st:"VA",lat:38.7360,lng:-77.8085,pop:72,
+   poly:[[38.9500,-77.6000],[38.8800,-77.5400],[38.8200,-77.5500],[38.7200,-77.5200],[38.6500,-77.6500],[38.6000,-77.8000],[38.6500,-77.9500],[38.7800,-78.0000],[38.8800,-77.9200],[38.9200,-77.7500]]},
+  {id:"51177",nm:"Spotsylvania",short:"SPOTSYL",st:"VA",lat:38.2240,lng:-77.5847,pop:141,
+   poly:[[38.3500,-77.3800],[38.3000,-77.4200],[38.2000,-77.4600],[38.1200,-77.5500],[38.1200,-77.7000],[38.2500,-77.7500],[38.3500,-77.7000],[38.3800,-77.5800]]},
+  {id:"51043",nm:"Clarke",short:"CLARKE",st:"VA",lat:39.1131,lng:-77.9961,pop:15,
+   poly:[[39.2200,-78.0500],[39.2200,-77.8200],[39.1200,-77.7700],[39.0500,-77.8000],[39.0500,-77.9600],[39.1200,-78.0500]]},
+  {id:"51187",nm:"Warren",short:"WARREN",st:"VA",lat:38.9155,lng:-78.2104,pop:41,
+   poly:[[39.0500,-78.0000],[38.9500,-78.0500],[38.8500,-78.1500],[38.8200,-78.2800],[38.9000,-78.3500],[38.9800,-78.2500],[39.0200,-78.1200]]},
+  {id:"51047",nm:"Culpeper",short:"CULPEPER",st:"VA",lat:38.4843,lng:-77.9967,pop:52,
+   poly:[[38.6500,-77.9500],[38.5500,-77.9000],[38.4200,-77.8500],[38.3500,-77.9500],[38.4000,-78.1000],[38.5000,-78.1500],[38.5800,-78.0500]]},
+  {id:"51157",nm:"Rappahannock",short:"RAPPA",st:"VA",lat:38.6833,lng:-78.1607,pop:7,
+   poly:[[38.8800,-78.1500],[38.7800,-78.0000],[38.6500,-77.9500],[38.5800,-78.0500],[38.6200,-78.2500],[38.7500,-78.3000],[38.8500,-78.2500]]},
+  {id:"51510",nm:"Alexandria",short:"ALEX",st:"VA",lat:38.8048,lng:-77.0469,pop:160,
+   poly:[[38.8350,-77.0520],[38.8350,-77.0180],[38.8100,-77.0100],[38.7850,-77.0350],[38.7800,-77.0650],[38.7950,-77.0800],[38.8200,-77.0800]]},
+  {id:"51610",nm:"Falls\nChurch",short:"FC",st:"VA",lat:38.8823,lng:-77.1711,pop:15,
+   poly:[[38.8960,-77.1850],[38.8960,-77.1500],[38.8750,-77.1450],[38.8680,-77.1620],[38.8730,-77.1850]]},
+  {id:"51683",nm:"Manassas",short:"MANASSAS",st:"VA",lat:38.7509,lng:-77.4753,pop:42,
+   poly:[[38.7680,-77.4750],[38.7680,-77.4450],[38.7450,-77.4350],[38.7320,-77.4500],[38.7380,-77.4750],[38.7550,-77.4820]]},
+  {id:"51630",nm:"Fredericksburg",short:"FBURG",st:"VA",lat:38.3032,lng:-77.4606,pop:29,
+   poly:[[38.3220,-77.4700],[38.3220,-77.4300],[38.2950,-77.4150],[38.2800,-77.4350],[38.2850,-77.4650],[38.3050,-77.4750]]},
+];
+
+// State label positions
+const STATE_LABELS = [
+  {name:"MARYLAND",lat:39.42,lng:-76.65,size:16},
+  {name:"VIRGINIA",lat:38.55,lng:-77.75,size:16},
+  {name:"DISTRICT OF\nCOLUMBIA",lat:38.91,lng:-76.88,size:10},
+];
+
+// ═══════════════════════════════════════════════════════════════
+// Risk profiles
+// ═══════════════════════════════════════════════════════════════
+const PROFILES = {
+  Flood:{"11001":55,"24033":72,"24017":80,"24009":68,"24037":75,"24003":62,"24031":50,"24021":48,"24027":45,"24005":40,"24510":52,"24025":38,"24013":30,"24043":42,"24035":58,"51059":48,"51013":42,"51510":55,"51610":35,"51107":38,"51153":52,"51179":60,"51061":35,"51177":58,"51630":65,"51043":28,"51187":32,"51047":40,"51157":25,"51683":42},
+  Hurricane:{"24037":82,"24009":78,"24017":72,"24033":60,"24003":70,"24035":68,"24005":35,"24510":38,"24025":32,"11001":45,"24031":35,"24027":30,"24021":18,"24013":15,"24043":12,"51510":48,"51013":40,"51059":35,"51610":32,"51153":30,"51179":38,"51107":15,"51061":12,"51177":25,"51630":28,"51683":22,"51043":8,"51187":10,"51047":15,"51157":10},
+  "Winter Storm":{"24021":85,"24013":82,"24043":88,"51043":80,"51187":78,"51157":75,"51061":72,"51107":70,"51047":74,"24027":65,"24031":60,"24005":62,"24510":55,"24025":68,"24033":48,"11001":50,"51059":55,"51013":48,"51610":50,"51153":52,"51179":55,"51177":58,"51630":55,"24003":45,"24017":42,"24009":40,"24037":35,"24035":50,"51510":45,"51683":52},
+  Tornado:{"24017":65,"24037":58,"24009":60,"24033":55,"51179":62,"51177":58,"51630":55,"51047":52,"51153":50,"51061":48,"24003":45,"24035":52,"24027":38,"24031":35,"24021":40,"24013":42,"24005":35,"24510":30,"24025":38,"24043":45,"11001":30,"51059":35,"51013":28,"51510":25,"51610":22,"51107":40,"51043":38,"51187":42,"51157":45,"51683":42},
+  Earthquake:{"51047":45,"51061":42,"51157":48,"51043":40,"51187":38,"51107":35,"24021":35,"24043":38,"51177":40,"51630":38,"51153":30,"51179":32,"51059":28,"51013":25,"24031":25,"24027":22,"11001":22,"24033":20,"24017":18,"24005":18,"24510":18,"24003":15,"24013":28,"24025":15,"24009":15,"24037":12,"24035":12,"51510":22,"51610":24,"51683":28},
+};
+
+const SM={Flood:{Spring:1,Summer:.7,Fall:.5,Winter:.3},Hurricane:{Spring:.2,Summer:.75,Fall:1,Winter:.1},"Winter Storm":{Spring:.3,Summer:.05,Fall:.4,Winter:1},Tornado:{Spring:1,Summer:.7,Fall:.4,Winter:.15},Earthquake:{Spring:.7,Summer:.7,Fall:.7,Winter:.7}};
+const HM={"30 days":1,"90 days":.85,"6 months":.7,"1 year":.55};
+
+function rc(s){return s>=70?"#c0392b":s>=50?"#e67e22":s>=30?"#eab308":s>=15?"#84cc16":"#22c55e"}
+function rl(s){return s>=70?"Critical":s>=50?"High":s>=30?"Moderate":s>=15?"Low":"Minimal"}
+function rb(s){return s>=70?"#3b1010":s>=50?"#3b2010":s>=30?"#3b3010":s>=15?"#1a3010":"#103020"}
+
+function calc(type,sev,hor,sea){
+  const p=PROFILES[type]||{};
+  const sm=(SM[type]||{})[sea]||.5;
+  const hm=HM[hor]||.7;
+  const sv=sev/3;
+  const o={};
+  C.forEach(c=>{
+    const b=p[c.id]||15;
+    let sc=b*sm*hm*sv;
+    sc=Math.min(100,Math.max(0,sc+(Math.random()*6-3)));
+    o[c.id]=Math.round(sc*10)/10;
+  });
+  return o;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════
+let cType="Flood",cSev=3,cHor="90 days",cSea="Spring";
+let map,polyLayer,markerLayer,labelLayer;
+
+function initMap(){
+  map=L.map('map',{zoomControl:true}).setView([38.95,-77.25],9);
+
+  // Stamen Terrain-like via Stadia Maps (light, geographic, with labels)
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    maxZoom:18,subdomains:'abcd',
+    attribution:'&copy; OpenStreetMap &copy; CartoDB'
+  }).addTo(map);
+
+  polyLayer=L.layerGroup().addTo(map);
+  markerLayer=L.layerGroup().addTo(map);
+  labelLayer=L.layerGroup().addTo(map);
+
+  render();
+}
+
+function render(){
+  polyLayer.clearLayers();
+  markerLayer.clearLayers();
+  labelLayer.clearLayers();
+
+  const risks=calc(cType,cSev,cHor,cSea);
+
+  // Draw county boundary polygons (dashed, unfilled or lightly filled)
+  C.forEach(c=>{
+    const score=risks[c.id]||0;
+    const latlngs=c.poly.map(p=>[p[0],p[1]]);
+
+    const poly=L.polygon(latlngs,{
+      color:"#555",
+      weight:1.2,
+      dashArray:"6 4",
+      opacity:0.6,
+      fillColor:rc(score),
+      fillOpacity:0.12,
+    }).addTo(polyLayer);
+
+    const displayName=c.nm.replace(/\n/g,' ');
+    const sub=`${c.st} · Pop ${c.pop.toLocaleString()}K`;
+
+    poly.bindTooltip(
+      `<div class="tn">${displayName}</div>`+
+      `<div class="ts">${sub}</div>`+
+      `<span class="tv" style="color:${rc(score)}">${score.toFixed(1)}</span>`+
+      `<span class="tl" style="color:${rc(score)}">${rl(score)}</span>`,
+      {className:'risk-tip',sticky:true,direction:'top',offset:[0,-12]}
+    );
+
+    poly.on('mouseover',function(){
+      this.setStyle({fillOpacity:0.35,weight:2,color:'#333',dashArray:''});
+      this.bringToFront();
+      showHP(c,score);
+    });
+    poly.on('mouseout',function(){
+      this.setStyle({fillOpacity:0.12,weight:1.2,color:'#555',dashArray:'6 4'});
+      hideHP();
+    });
+  });
+
+  // Draw risk circle markers at county centroids
+  C.forEach(c=>{
+    const score=risks[c.id]||0;
+    const radius=Math.max(6, Math.min(18, score/5));
+
+    const marker=L.circleMarker([c.lat,c.lng],{
+      radius:radius,
+      fillColor:rc(score),
+      fillOpacity:0.7,
+      color:'rgba(0,0,0,0.25)',
+      weight:1.5,
+    }).addTo(markerLayer);
+
+    // Score label inside circle for larger markers
+    if(radius >= 8){
+      const scoreLbl = L.marker([c.lat,c.lng],{
+        icon:L.divIcon({
+          className:'county-label-small',
+          html:`<span style="color:#222;font-size:8px;font-weight:700;font-family:'JetBrains Mono',monospace">${Math.round(score)}</span>`,
+          iconSize:[30,14],
+          iconAnchor:[15,7],
+        }),
+        interactive:false,
+      }).addTo(markerLayer);
+    }
+  });
+
+  // County name labels
+  C.forEach(c=>{
+    const lines = c.nm.split('\n');
+    const isSmall = c.pop < 50;
+    const offsetY = lines.length > 1 ? -22 : -16;
+
+    const lbl=L.marker([c.lat,c.lng],{
+      icon:L.divIcon({
+        className: isSmall ? 'county-label-small' : 'county-label',
+        html: lines.map(l=>`<div style="line-height:1.2">${l}</div>`).join(''),
+        iconSize:[120,40],
+        iconAnchor:[60, -offsetY],
+      }),
+      interactive:false,
+    }).addTo(labelLayer);
+  });
+
+  // State labels (large, faint)
+  STATE_LABELS.forEach(s=>{
+    const lines=s.name.split('\n');
+    L.marker([s.lat,s.lng],{
+      icon:L.divIcon({
+        className:'state-label',
+        html:lines.map(l=>`<div style="font-size:${s.size}px;line-height:1.15">${l}</div>`).join(''),
+        iconSize:[200,50],
+        iconAnchor:[100,25],
+      }),
+      interactive:false,
+    }).addTo(labelLayer);
+  });
+
+  updateKPIs(risks);
+}
+
+function updateKPIs(risks){
+  const sorted=C.map(c=>({...c,score:risks[c.id]||0})).sort((a,b)=>b.score-a.score);
+  const hi=sorted.filter(c=>c.score>=50).length;
+  const avg=Math.round(sorted.reduce((s,c)=>s+c.score,0)/sorted.length*10)/10;
+  const pop=sorted.filter(c=>c.score>=50).reduce((s,c)=>s+c.pop,0);
+  const top=sorted[0];
+  document.getElementById('k1').innerHTML=`${hi}<span class="kpi-sub">/ ${C.length}</span>`;
+  document.getElementById('k2').innerHTML=`${avg}<span class="kpi-sub">/ 100</span>`;
+  document.getElementById('k3').innerHTML=pop>=1000?`${(pop/1000).toFixed(1)}M`:`${pop}K`;
+  document.getElementById('k4').innerHTML=`<span style="font-family:'IBM Plex Sans';font-size:13px">${top.nm.replace(/\n/g,' ')}</span><span class="kpi-sub">${top.score.toFixed(1)}</span>`;
+}
+
+function showHP(item,score){
+  const el=document.getElementById('hPanel');
+  el.className='hover-panel';
+  el.style.background=rb(score);
+  el.style.border=`1px solid ${rc(score)}40`;
+  el.innerHTML=
+    `<div class="hp-name">${item.nm.replace(/\n/g,' ')}</div>`+
+    `<div class="hp-sub">${item.st} · Pop ${item.pop.toLocaleString()}K</div>`+
+    `<div class="hp-row"><span class="hp-score" style="color:${rc(score)}">${score.toFixed(1)}</span>`+
+    `<span class="hp-badge" style="background:${rc(score)}20;color:${rc(score)};border:1px solid ${rc(score)}40">${rl(score)}</span></div>`;
+}
+function hideHP(){
+  const el=document.getElementById('hPanel');
+  el.className='info-box';el.style.background='';el.style.border='';
+  el.innerHTML='ⓘ Hover over county markers on the map to see risk scores. This is a simulated demo with mock risk data.';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Event wiring
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  initMap();
+  document.getElementById('inType').addEventListener('change',e=>{cType=e.target.value;render();});
+  document.getElementById('inSev').addEventListener('input',e=>{
+    cSev=+e.target.value;document.getElementById('sevLab').textContent=`Severity — Level ${cSev}`;render();
+  });
+  document.getElementById('inHor').addEventListener('change',e=>{cHor=e.target.value;render();});
+  document.querySelectorAll('.season-btn').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.season-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');cSea=b.dataset.s;render();
+  }));
+});
+</script>
+</body>
+</html>
