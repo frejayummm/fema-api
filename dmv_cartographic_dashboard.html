@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Disaster Risk Dashboard — DMV & Alabama</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:#1b1b1b;color:#e8e4df;height:100vh;overflow:hidden}
+#app{display:flex;height:100vh;flex-direction:column}
+
+/* Header */
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 22px;
+  background:#1b1b1b;border-bottom:1px solid #333;z-index:1000;flex-shrink:0}
+.hdr-left{display:flex;align-items:center;gap:14px}
+.hdr-left h1{font-family:'Playfair Display',serif;font-size:18px;color:#f5f0e8;letter-spacing:-0.01em}
+.hdr-left p{font-size:9.5px;color:#888;text-transform:uppercase;letter-spacing:0.08em;font-weight:500}
+.hdr-right{display:flex;gap:8px;align-items:center}
+.hdr-badge{padding:4px 12px;border-radius:5px;font-size:10px;font-weight:600;
+  background:#2a2a2a;border:1px solid #444;color:#aaa;font-family:'JetBrains Mono',monospace}
+
+/* Main layout */
+.main-row{display:flex;flex:1;overflow:hidden;min-height:0;height:0}
+
+/* Sidebar */
+.sidebar{width:260px;min-width:260px;border-right:1px solid #333;padding:18px 16px;
+  display:flex;flex-direction:column;gap:15px;background:#1f1f1f;overflow-y:auto;flex-shrink:0}
+.sec-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;color:#777;margin-bottom:-4px}
+.field label{display:block;font-size:10.5px;font-weight:500;color:#aaa;margin-bottom:4px}
+.field select{width:100%;padding:7px 10px;border-radius:5px;font-size:12px;
+  background:#2a2a2a;color:#ddd;border:1px solid #444;outline:none;cursor:pointer;font-family:inherit}
+.field input[type=range]{width:100%;accent-color:#c9a96e;cursor:pointer;margin-top:2px}
+.range-lab{display:flex;justify-content:space-between;font-size:8.5px;color:#666;margin-top:2px}
+.season-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.season-btn{padding:6px 0;border-radius:5px;font-size:11px;font-weight:500;cursor:pointer;
+  border:1px solid #444;background:transparent;color:#888;transition:all 0.15s;font-family:inherit}
+.season-btn.active{border-color:#c9a96e;background:rgba(201,169,110,0.1);color:#dcc088}
+
+/* Legend */
+.legend{border-top:1px solid #333;padding-top:14px}
+.leg-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}
+.leg-circ{width:16px;height:16px;border-radius:50%;flex-shrink:0;border:2px solid rgba(0,0,0,0.3)}
+.leg-name{color:#ccc;font-weight:500}
+.leg-range{color:#666;font-family:'JetBrains Mono',monospace;font-size:9.5px;margin-left:auto}
+
+/* KPI strip */
+.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 18px;
+  background:#1b1b1b;border-bottom:1px solid #333;flex-shrink:0}
+.kpi{background:#242424;border-radius:7px;padding:10px 12px;border:1px solid #333}
+.kpi-label{font-size:8.5px;color:#777;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:4px}
+.kpi-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:#f5f0e8;line-height:1}
+.kpi-sub{font-size:10px;color:#666;font-weight:400;margin-left:3px}
+
+/* Hover panel */
+.hover-panel{margin-top:auto;padding:14px;border-radius:8px;transition:all 0.2s}
+.hp-name{font-size:14px;font-weight:700;color:#f5f0e8;font-family:'Playfair Display',serif}
+.hp-sub{font-size:10px;color:#999;margin-bottom:8px}
+.hp-row{display:flex;justify-content:space-between;align-items:baseline}
+.hp-score{font-size:30px;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1}
+.hp-badge{font-size:10px;font-weight:600;padding:3px 10px;border-radius:4px}
+.info-box{margin-top:auto;padding:12px;border-radius:7px;background:#24242480;border:1px solid #33333380;
+  font-size:10px;color:#666;line-height:1.5}
+
+/* Map */
+.map-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;height:100%}
+#map-wrap{flex:1;margin:0;position:relative;overflow:hidden;min-height:0}
+#map{position:absolute;top:0;left:0;right:0;bottom:0}
+
+/* Leaflet overrides for light terrain look */
+.leaflet-control-zoom a{background:#2a2a2a!important;color:#aaa!important;border-color:#444!important}
+.leaflet-control-attribution{font-size:8px!important;background:rgba(27,27,27,0.8)!important;color:#666!important}
+.leaflet-control-attribution a{color:#888!important}
+
+/* Custom labels on the map */
+.county-label{
+  background:none!important;border:none!important;box-shadow:none!important;
+  font-family:'IBM Plex Sans',sans-serif!important;font-weight:600!important;
+  color:#4a4a4a!important;font-size:11px!important;text-transform:uppercase!important;
+  letter-spacing:0.06em!important;white-space:nowrap!important;
+  text-shadow:1px 1px 0 rgba(255,255,255,0.7),-1px -1px 0 rgba(255,255,255,0.7),
+    1px -1px 0 rgba(255,255,255,0.7),-1px 1px 0 rgba(255,255,255,0.7)!important;
+}
+.county-label-small{
+  background:none!important;border:none!important;box-shadow:none!important;
+  font-family:'IBM Plex Sans',sans-serif!important;font-weight:500!important;
+  color:#6a6a6a!important;font-size:9px!important;text-transform:uppercase!important;
+  letter-spacing:0.04em!important;white-space:nowrap!important;
+  text-shadow:1px 1px 0 rgba(255,255,255,0.6),-1px -1px 0 rgba(255,255,255,0.6),
+    1px -1px 0 rgba(255,255,255,0.6),-1px 1px 0 rgba(255,255,255,0.6)!important;
+}
+.state-label{
+  background:none!important;border:none!important;box-shadow:none!important;
+  font-family:'IBM Plex Sans',sans-serif!important;font-weight:700!important;
+  color:#3a3a3a!important;font-size:14px!important;text-transform:uppercase!important;
+  letter-spacing:0.14em!important;white-space:nowrap!important;
+  text-shadow:1px 1px 0 rgba(255,255,255,0.8),-1px -1px 0 rgba(255,255,255,0.8),
+    1px -1px 0 rgba(255,255,255,0.8),-1px 1px 0 rgba(255,255,255,0.8)!important;
+}
+
+/* Hospital markers */
+.hosp-icon{border-radius:50%!important;border:2px solid rgba(255,255,255,0.85)!important;
+  box-shadow:0 2px 8px rgba(0,0,0,0.5)!important;display:flex!important;align-items:center!important;
+  justify-content:center!important;font-size:10px!important;font-weight:700!important;color:#fff!important;
+  font-family:'JetBrains Mono',monospace!important;text-shadow:0 1px 2px rgba(0,0,0,0.5)!important}
+.hosp-label{background:none!important;border:none!important;box-shadow:none!important;
+  font-family:'IBM Plex Sans',sans-serif!important;font-weight:600!important;
+  color:#444!important;font-size:8.5px!important;white-space:nowrap!important;
+  text-shadow:1px 1px 0 rgba(255,255,255,0.8),-1px -1px 0 rgba(255,255,255,0.8),
+    1px -1px 0 rgba(255,255,255,0.8),-1px 1px 0 rgba(255,255,255,0.8)!important}
+.hosp-tip{background:#1a1028!important;border:1px solid #5b21b6!important;color:#e8e4df!important;
+  border-radius:6px!important;padding:12px 16px!important;font-family:'IBM Plex Sans',sans-serif!important;
+  font-size:12px!important;box-shadow:0 6px 24px rgba(0,0,0,0.6)!important;
+  max-width:320px!important;width:max-content!important;white-space:normal!important;
+  overflow:visible!important;word-wrap:break-word!important}
+.hosp-tip .hn{font-weight:700;font-size:13px;margin-bottom:3px;white-space:normal!important}
+.hosp-tip .hs{color:#a78bfa;font-size:10px;margin-bottom:5px;white-space:normal!important}
+.hosp-tip .hv{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:11px;margin-bottom:4px;white-space:normal!important}
+.hosp-tip .hd{color:#888;font-size:10px;line-height:1.4;white-space:normal!important}
+/* Override Leaflet tooltip defaults that cause overflow */
+.leaflet-tooltip.hosp-tip{white-space:normal!important;overflow:visible!important}
+.leaflet-tooltip.risk-tip{white-space:normal!important;overflow:visible!important}
+/* Toggle */
+.layer-toggle{display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer}
+.layer-toggle input{accent-color:#a78bfa;cursor:pointer;width:15px;height:15px}
+.layer-toggle span{font-size:11px;color:#ccc;font-weight:500}
+
+/* Tooltip on hover */
+.risk-tip{
+  background:#1f1f1f!important;border:1px solid #444!important;color:#e8e4df!important;
+  border-radius:6px!important;padding:12px 16px!important;font-family:'IBM Plex Sans',sans-serif!important;
+  font-size:12px!important;box-shadow:0 6px 24px rgba(0,0,0,0.6)!important;
+  white-space:normal!important;max-width:280px!important;
+}
+.risk-tip .tn{font-weight:700;font-size:13px;margin-bottom:2px}
+.risk-tip .ts{color:#888;font-size:10px;margin-bottom:5px}
+.risk-tip .tv{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:18px}
+.risk-tip .tl{font-size:10px;font-weight:600;margin-left:6px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="hdr-left">
+      <div>
+        <h1>Disaster Risk Prediction Dashboard</h1>
+        <p>County-Level Cartographic View · DMV & Alabama</p>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="view-toggle" id="regionToggle" style="display:flex;border-radius:5px;border:1px solid #444;overflow:hidden;margin-right:8px">
+        <button class="active" data-region="dmv" style="padding:5px 14px;font-size:10px;font-weight:600;cursor:pointer;border:none;background:#c9a96e;color:#1b1b1b;font-family:inherit;transition:all 0.15s">DMV</button>
+        <button data-region="alabama" style="padding:5px 14px;font-size:10px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#888;font-family:inherit;transition:all 0.15s">Alabama</button>
+      </div>
+      <span class="hdr-badge" id="countBadge">30 COUNTIES</span>
+      <span class="hdr-badge">DEMO</span>
+    </div>
+  </header>
+
+  <div class="kpi-strip">
+    <div class="kpi" style="border-left:3px solid #c0392b"><div class="kpi-label">Counties High+ Risk</div><div class="kpi-val" id="k1">—</div></div>
+    <div class="kpi" style="border-left:3px solid #e67e22"><div class="kpi-label">Avg Risk Score</div><div class="kpi-val" id="k2">—</div></div>
+    <div class="kpi" style="border-left:3px solid #f1c40f"><div class="kpi-label">Population Exposed</div><div class="kpi-val" id="k3">—</div></div>
+    <div class="kpi" style="border-left:3px solid #c9a96e"><div class="kpi-label">Highest Risk</div><div class="kpi-val" id="k4">—</div></div>
+  </div>
+
+  <div class="main-row">
+    <aside class="sidebar">
+      <div class="sec-label">Model Parameters</div>
+      <div class="field">
+        <label>Disaster Type</label>
+        <select id="inType"><option>Flood</option><option>Hurricane</option><option>Winter Storm</option><option>Tornado</option><option>Earthquake</option></select>
+      </div>
+      <div class="field">
+        <label id="sevLab">Severity — Level 3</label>
+        <input type="range" id="inSev" min="1" max="5" value="3"/>
+        <div class="range-lab"><span>Minor</span><span>Catastrophic</span></div>
+      </div>
+      <div class="field">
+        <label>Forecast Horizon</label>
+        <select id="inHor"><option>30 days</option><option selected>90 days</option><option>6 months</option><option>1 year</option></select>
+      </div>
+      <div class="field">
+        <label>Season</label>
+        <div class="season-grid" id="sSel">
+          <button class="season-btn active" data-s="Spring">Spring</button>
+          <button class="season-btn" data-s="Summer">Summer</button>
+          <button class="season-btn" data-s="Fall">Fall</button>
+          <button class="season-btn" data-s="Winter">Winter</button>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="sec-label" style="margin-bottom:10px">Risk Legend</div>
+        <div class="leg-row"><span class="leg-circ" style="background:#22c55e"></span><span class="leg-name">Minimal</span><span class="leg-range">0 – 14</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#84cc16"></span><span class="leg-name">Low</span><span class="leg-range">15 – 29</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#eab308"></span><span class="leg-name">Moderate</span><span class="leg-range">30 – 49</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#e67e22"></span><span class="leg-name">High</span><span class="leg-range">50 – 69</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#c0392b"></span><span class="leg-name">Critical</span><span class="leg-range">70 – 100</span></div>
+      </div>
+
+      <div style="border-top:1px solid #333;padding-top:12px">
+        <label class="layer-toggle"><input type="checkbox" id="hospToggle" checked/><span>Show Pediatric ED Volume</span></label>
+        <div class="sec-label" style="margin:8px 0 8px">NPRP Pediatric ED Volume</div>
+        <div class="leg-row"><span class="leg-circ" style="background:#7c3aed;width:20px;height:20px"></span><span class="leg-name">High</span><span class="leg-range">≥10,000/yr</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#a78bfa;width:17px;height:17px"></span><span class="leg-name">Med-High</span><span class="leg-range">5K–9,999</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#c4b5fd;width:14px;height:14px"></span><span class="leg-name">Medium</span><span class="leg-range">1.8K–4,999</span></div>
+        <div class="leg-row"><span class="leg-circ" style="background:#ddd6fe;width:11px;height:11px"></span><span class="leg-name">Low</span><span class="leg-range">&lt;1,800</span></div>
+        <div style="font-size:8.5px;color:#666;margin-top:4px;line-height:1.4">
+          <b>⬡ = Critical Access Hospital (CAH)</b><br>
+          Per <a href="https://www.cms.gov/medicare/health-safety-standards/certification-compliance/critical-access-hospitals" target="_blank" style="color:#c9a96e">CMS / 42 CFR §485 Subpart F</a>, a CAH must:<br>
+          • Be located in a rural area in a state with a Medicare Rural Hospital Flexibility Program<br>
+          • Be >35 mi from nearest hospital (or >15 mi in mountainous terrain / secondary roads)<br>
+          • Maintain ≤25 inpatient beds (used for inpatient or swing-bed services)<br>
+          • Maintain annual avg length of stay ≤96 hrs per patient<br>
+          • Provide 24/7 emergency care services<br>
+          <span style="color:#888">Note: MD &amp; DC have no CAHs — MD has not established a State Flex Program. VA has CAHs only in rural western counties.</span><br><br>
+          Volume per <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10329204/" target="_blank" style="color:#c9a96e">NPRP Assessment</a> (Remick et al., JAMA Netw Open 2023). Hospital volumes are estimates from public sources.
+        </div>
+
+        <div style="margin-top:10px;border-top:1px solid #333;padding-top:10px">
+          <div class="sec-label" style="margin-bottom:8px">WPRS — Readiness Score</div>
+          <div style="font-size:9px;color:#999;line-height:1.5;margin-bottom:6px">
+            <b style="color:#ccc">Weighted Pediatric Readiness Score</b> (0–100) measures an ED's capability to care for children across 6 domains:
+          </div>
+          <div style="font-size:8.5px;color:#888;line-height:1.5;margin-bottom:6px">
+            ① Administration &amp; Coordination (PECCs)<br>
+            ② Physician/Nurse Competencies<br>
+            ③ Quality Improvement<br>
+            ④ Policies &amp; Procedures<br>
+            ⑤ Patient Safety<br>
+            ⑥ Equipment, Supplies &amp; Medications
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px">
+              <span style="width:40px;height:6px;border-radius:3px;background:linear-gradient(90deg,#22c55e,#22c55e);display:inline-block"></span>
+              <span style="color:#22c55e;font-weight:600">≥87</span><span style="color:#888">High readiness — 76% lower mortality</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px">
+              <span style="width:40px;height:6px;border-radius:3px;background:linear-gradient(90deg,#eab308,#eab308);display:inline-block"></span>
+              <span style="color:#eab308;font-weight:600">70–86</span><span style="color:#888">Moderate readiness</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px">
+              <span style="width:40px;height:6px;border-radius:3px;background:linear-gradient(90deg,#c0392b,#c0392b);display:inline-block"></span>
+              <span style="color:#c0392b;font-weight:600">&lt;70</span><span style="color:#888">Low readiness (national median: 69.5)</span>
+            </div>
+          </div>
+          <div style="font-size:8px;color:#666;line-height:1.4">
+            Source: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10329204/" target="_blank" style="color:#c9a96e">Remick et al., JAMA Netw Open 2023</a>; <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC6856787/" target="_blank" style="color:#c9a96e">Ames et al., Pediatrics 2019</a>. Scores shown are estimates based on volume tier, hospital type, and published median ranges.
+          </div>
+        </div>
+
+        <div style="margin-top:10px;border-top:1px solid #333;padding-top:10px">
+          <label class="layer-toggle"><input type="checkbox" id="teleToggle"/><span>Show Telehealth Utilization</span></label>
+          <div class="sec-label" style="margin:6px 0 6px">Medicare Telehealth (2024)</div>
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
+            <span style="flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,#1e3a5f,#2563eb,#60a5fa,#93c5fd)"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:8.5px;color:#888;margin-bottom:6px">
+            <span>Low (&lt;25%)</span><span>High (&gt;45%)</span>
+          </div>
+          <div style="font-size:8px;color:#666;line-height:1.4">
+            % of Medicare FFS beneficiaries using ≥1 telehealth service/qtr. Source: <a href="https://data.cms.gov/summary-statistics-on-use-and-payments/medicare-medicaid-service-type-reports/medicare-telehealth-trends" target="_blank" style="color:#60a5fa">CMS Medicare Telehealth Trends</a> (Jan 2020–Mar 2025). County estimates derived from state-level rates + urban/rural adjustment.
+          </div>
+        </div>
+      </div>
+
+      <div id="hPanel" class="info-box">ⓘ Hover over county markers on the map to see risk scores. This is a simulated demo with mock risk data.</div>
+    </aside>
+
+    <div class="map-area">
+      <div id="map-wrap"><div id="map"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// County data with approximate polygon boundaries
+// ═══════════════════════════════════════════════════════════════
+const C = [
+  {id:"11001",nm:"District of\nColumbia",short:"DC",st:"DC",lat:38.9072,lng:-77.0369,pop:690,
+   poly:[[38.9958,-77.0412],[38.9940,-76.9094],[38.8271,-76.9117],[38.7916,-77.0389],[38.8954,-77.0410],[38.9345,-77.0390]]},
+
+  {id:"24031",nm:"Montgomery",short:"MNTGMRY",st:"MD",lat:39.1380,lng:-77.2175,pop:1063,
+   poly:[[39.3500,-77.3300],[39.3500,-77.0300],[39.2200,-77.0000],[39.1400,-76.9500],[39.0500,-76.9800],[38.9958,-77.0412],[38.9800,-77.0700],[38.9900,-77.2400],[39.0600,-77.2800]]},
+  {id:"24033",nm:"Prince\nGeorge's",short:"PG",st:"MD",lat:38.8296,lng:-76.8472,pop:968,
+   poly:[[39.0500,-76.9800],[39.0500,-76.8400],[38.9700,-76.7500],[38.8400,-76.7200],[38.7900,-76.8000],[38.7500,-76.8800],[38.7600,-76.9500],[38.8271,-76.9117],[38.9940,-76.9094],[38.9958,-77.0412]]},
+  {id:"24003",nm:"Anne\nArundel",short:"ANNEARNDL",st:"MD",lat:38.9529,lng:-76.5488,pop:589,
+   poly:[[39.1400,-76.6500],[39.1400,-76.4800],[39.0200,-76.4000],[38.8800,-76.4200],[38.8300,-76.5400],[38.8600,-76.6600],[38.9200,-76.7200],[39.0500,-76.7500],[39.0500,-76.8400]]},
+  {id:"24027",nm:"Howard",short:"HOWARD",st:"MD",lat:39.2037,lng:-76.9311,pop:328,
+   poly:[[39.3500,-76.9500],[39.3200,-76.8000],[39.1800,-76.7000],[39.1400,-76.6500],[39.0500,-76.8400],[39.0500,-76.9800],[39.1400,-76.9500],[39.2200,-77.0000]]},
+  {id:"24021",nm:"Frederick",short:"FRED",st:"MD",lat:39.4143,lng:-77.4105,pop:272,
+   poly:[[39.7200,-77.4600],[39.7200,-77.1600],[39.5600,-77.0500],[39.4500,-77.0000],[39.3500,-77.0300],[39.3500,-77.3300],[39.3800,-77.3800],[39.4200,-77.4600]]},
+  {id:"24017",nm:"Charles",short:"CHARLES",st:"MD",lat:38.4754,lng:-76.9780,pop:167,
+   poly:[[38.7600,-76.9500],[38.7500,-76.8800],[38.6600,-76.8200],[38.5200,-76.8400],[38.4000,-76.9300],[38.3800,-77.0000],[38.4800,-77.0500],[38.6000,-77.0200],[38.7000,-77.0000]]},
+  {id:"24009",nm:"Calvert",short:"CALVERT",st:"MD",lat:38.5347,lng:-76.5282,pop:93,
+   poly:[[38.6600,-76.5800],[38.6600,-76.4500],[38.5200,-76.3800],[38.3800,-76.4200],[38.3500,-76.5600],[38.4200,-76.6200],[38.5200,-76.6800]]},
+  {id:"24037",nm:"St. Mary's",short:"STMARYS",st:"MD",lat:38.2137,lng:-76.5345,pop:114,
+   poly:[[38.4200,-76.6200],[38.3500,-76.5600],[38.2800,-76.4000],[38.1400,-76.3500],[38.1000,-76.5200],[38.1500,-76.6500],[38.2500,-76.6800],[38.3500,-76.6500]]},
+  {id:"24005",nm:"Baltimore\nCounty",short:"BALTCO",st:"MD",lat:39.4100,lng:-76.6105,pop:855,
+   poly:[[39.5200,-76.7800],[39.5200,-76.5200],[39.3800,-76.4500],[39.3200,-76.5400],[39.2200,-76.5800],[39.1800,-76.7000],[39.3200,-76.8000],[39.3500,-76.9500],[39.4500,-76.8700]]},
+  {id:"24510",nm:"Baltimore\nCity",short:"BALT",st:"MD",lat:39.2904,lng:-76.6122,pop:586,
+   poly:[[39.3500,-76.6800],[39.3500,-76.5600],[39.2800,-76.5400],[39.2500,-76.5800],[39.2500,-76.6500],[39.2800,-76.7000]]},
+  {id:"24013",nm:"Carroll",short:"CARROLL",st:"MD",lat:39.5628,lng:-77.0120,pop:172,
+   poly:[[39.7200,-77.1600],[39.7200,-76.9200],[39.5600,-76.8400],[39.4500,-76.8700],[39.3500,-76.9500],[39.4500,-77.0000],[39.5600,-77.0500]]},
+  {id:"24025",nm:"Harford",short:"HARFORD",st:"MD",lat:39.5362,lng:-76.2989,pop:261,
+   poly:[[39.7200,-76.5200],[39.7200,-76.2400],[39.6000,-76.0800],[39.4700,-76.1200],[39.3800,-76.2200],[39.3800,-76.4500],[39.5200,-76.5200]]},
+  {id:"24043",nm:"Washington\nCounty",short:"WASHCO",st:"MD",lat:39.6018,lng:-77.8200,pop:155,
+   poly:[[39.7200,-77.8800],[39.7200,-77.4600],[39.4200,-77.4600],[39.3800,-77.5800],[39.4600,-77.6600],[39.5700,-77.7200],[39.5800,-77.8800]]},
+  {id:"24035",nm:"Queen\nAnne's",short:"QANNES",st:"MD",lat:39.0379,lng:-76.0851,pop:50,
+   poly:[[39.2200,-76.1000],[39.2200,-75.9200],[39.0800,-75.8600],[38.9500,-75.9600],[38.9500,-76.1000],[39.0800,-76.1500]]},
+
+  // Virginia
+  {id:"51059",nm:"Fairfax\nCounty",short:"FAIRFAX",st:"VA",lat:38.8462,lng:-77.3064,pop:1151,
+   poly:[[38.9400,-77.2500],[38.9200,-77.1000],[38.8954,-77.0410],[38.7916,-77.0389],[38.7200,-77.1400],[38.6800,-77.2300],[38.7000,-77.3200],[38.7600,-77.3600],[38.8200,-77.3200],[38.8800,-77.2800]]},
+  {id:"51013",nm:"Arlington",short:"ARLINGTON",st:"VA",lat:38.8799,lng:-77.1068,pop:239,
+   poly:[[38.9200,-77.1000],[38.9000,-77.0320],[38.8500,-77.0180],[38.8350,-77.0520],[38.8500,-77.0900],[38.8700,-77.1250]]},
+  {id:"51107",nm:"Loudoun",short:"LOUDOUN",st:"VA",lat:39.0768,lng:-77.6385,pop:421,
+   poly:[[39.3200,-77.6500],[39.3200,-77.3300],[39.0600,-77.2800],[38.9900,-77.2400],[38.9200,-77.2800],[38.8800,-77.3600],[38.8800,-77.5400],[38.9500,-77.6000],[39.0800,-77.6800],[39.2200,-77.6800]]},
+  {id:"51153",nm:"Prince\nWilliam",short:"PRWM",st:"VA",lat:38.6881,lng:-77.4742,pop:483,
+   poly:[[38.8200,-77.3200],[38.7600,-77.3600],[38.7000,-77.3200],[38.6500,-77.3300],[38.5800,-77.3500],[38.5600,-77.4500],[38.5800,-77.5400],[38.6500,-77.5600],[38.7200,-77.5200],[38.7800,-77.4600],[38.8200,-77.3800]]},
+  {id:"51179",nm:"Stafford",short:"STAFFORD",st:"VA",lat:38.4220,lng:-77.4083,pop:154,
+   poly:[[38.5800,-77.3500],[38.5600,-77.4500],[38.4800,-77.4600],[38.3500,-77.3800],[38.3000,-77.4200],[38.3200,-77.5400],[38.4200,-77.5400],[38.5200,-77.5000]]},
+  {id:"51061",nm:"Fauquier",short:"FAUQUIER",st:"VA",lat:38.7360,lng:-77.8085,pop:72,
+   poly:[[38.9500,-77.6000],[38.8800,-77.5400],[38.8200,-77.5500],[38.7200,-77.5200],[38.6500,-77.6500],[38.6000,-77.8000],[38.6500,-77.9500],[38.7800,-78.0000],[38.8800,-77.9200],[38.9200,-77.7500]]},
+  {id:"51177",nm:"Spotsylvania",short:"SPOTSYL",st:"VA",lat:38.2240,lng:-77.5847,pop:141,
+   poly:[[38.3500,-77.3800],[38.3000,-77.4200],[38.2000,-77.4600],[38.1200,-77.5500],[38.1200,-77.7000],[38.2500,-77.7500],[38.3500,-77.7000],[38.3800,-77.5800]]},
+  {id:"51043",nm:"Clarke",short:"CLARKE",st:"VA",lat:39.1131,lng:-77.9961,pop:15,
+   poly:[[39.2200,-78.0500],[39.2200,-77.8200],[39.1200,-77.7700],[39.0500,-77.8000],[39.0500,-77.9600],[39.1200,-78.0500]]},
+  {id:"51187",nm:"Warren",short:"WARREN",st:"VA",lat:38.9155,lng:-78.2104,pop:41,
+   poly:[[39.0500,-78.0000],[38.9500,-78.0500],[38.8500,-78.1500],[38.8200,-78.2800],[38.9000,-78.3500],[38.9800,-78.2500],[39.0200,-78.1200]]},
+  {id:"51047",nm:"Culpeper",short:"CULPEPER",st:"VA",lat:38.4843,lng:-77.9967,pop:52,
+   poly:[[38.6500,-77.9500],[38.5500,-77.9000],[38.4200,-77.8500],[38.3500,-77.9500],[38.4000,-78.1000],[38.5000,-78.1500],[38.5800,-78.0500]]},
+  {id:"51157",nm:"Rappahannock",short:"RAPPA",st:"VA",lat:38.6833,lng:-78.1607,pop:7,
+   poly:[[38.8800,-78.1500],[38.7800,-78.0000],[38.6500,-77.9500],[38.5800,-78.0500],[38.6200,-78.2500],[38.7500,-78.3000],[38.8500,-78.2500]]},
+  {id:"51510",nm:"Alexandria",short:"ALEX",st:"VA",lat:38.8048,lng:-77.0469,pop:160,
+   poly:[[38.8350,-77.0520],[38.8350,-77.0180],[38.8100,-77.0100],[38.7850,-77.0350],[38.7800,-77.0650],[38.7950,-77.0800],[38.8200,-77.0800]]},
+  {id:"51610",nm:"Falls\nChurch",short:"FC",st:"VA",lat:38.8823,lng:-77.1711,pop:15,
+   poly:[[38.8960,-77.1850],[38.8960,-77.1500],[38.8750,-77.1450],[38.8680,-77.1620],[38.8730,-77.1850]]},
+  {id:"51683",nm:"Manassas",short:"MANASSAS",st:"VA",lat:38.7509,lng:-77.4753,pop:42,
+   poly:[[38.7680,-77.4750],[38.7680,-77.4450],[38.7450,-77.4350],[38.7320,-77.4500],[38.7380,-77.4750],[38.7550,-77.4820]]},
+  {id:"51630",nm:"Fredericksburg",short:"FBURG",st:"VA",lat:38.3032,lng:-77.4606,pop:29,
+   poly:[[38.3220,-77.4700],[38.3220,-77.4300],[38.2950,-77.4150],[38.2800,-77.4350],[38.2850,-77.4650],[38.3050,-77.4750]]},
+];
+
+// State label positions
+const STATE_LABELS = [
+  {name:"MARYLAND",lat:39.42,lng:-76.65,size:16},
+  {name:"VIRGINIA",lat:38.55,lng:-77.75,size:16},
+  {name:"DISTRICT OF\nCOLUMBIA",lat:38.91,lng:-76.88,size:10},
+];
+
+// ═══════════════════════════════════════════════════════════════
+// Hospital data: Pediatric ED Volume tiers
+// tier: "high" (>10K/yr), "mid" (5K-10K), "low" (<5K)
+// Sources: Pediatric Pandemic Network (pedspandemicnetwork.org),
+//   GWU School of Medicine (emed.smhs.gwu.edu/core-hospitals),
+//   Inova Newsroom (inovanewsroom.org), hospital websites & fact sheets.
+//   Volumes are annual estimates based on publicly reported figures.
+// ═══════════════════════════════════════════════════════════════
+const HOSPITALS = [
+  // DC
+  {name:"Children's National Hospital",short:"Children's Natl",lat:38.9442,lng:-77.0129,
+   tier:"high",vol:"~100,000",beds:323,wprs:97,type:"Freestanding Children's",
+   note:"Only Level I Pediatric Trauma Center in DC metro. Regional referral center.",
+   src:"Pediatric Pandemic Network; Children's National Fact Sheet"},
+  {name:"MedStar Georgetown University Hospital",short:"Georgetown",lat:38.9117,lng:-77.0753,
+   tier:"medhigh",vol:"~8,000",beds:609,wprs:78,type:"Academic Medical Center",
+   note:"Pediatric ED staffed by Children's National physicians. Teaching hospital.",
+   src:"MedStar Health; GWU SMHS"},
+  {name:"MedStar Washington Hospital Center",short:"MedStar WHC",lat:38.9298,lng:-77.0159,
+   tier:"medhigh",vol:"~7,000",beds:912,wprs:75,type:"Regional Medical Center",
+   note:"Largest hospital in DC. Busiest adult ED; sees pediatric patients.",
+   src:"MedStar Health"},
+  {name:"George Washington University Hospital",short:"GW Hospital",lat:38.9012,lng:-77.0505,
+   tier:"med",vol:"~3,500",beds:371,wprs:68,type:"Academic Medical Center",
+   note:"Level I Trauma Center. ~19% admission rate. 74K+ total ED visits/yr.",
+   src:"GWU SMHS Core Hospitals"},
+  {name:"Howard University Hospital",short:"Howard Univ",lat:38.9217,lng:-77.0210,
+   tier:"med",vol:"~2,500",beds:276,wprs:64,type:"Teaching Hospital",
+   note:"Serving DC community. General ED with pediatric capability.",
+   src:"Howard University Hospital"},
+
+  // Northern Virginia
+  {name:"Inova Fairfax Hospital (L.J. Murphy Children's)",short:"Inova Fairfax",lat:38.8600,lng:-77.2981,
+   tier:"high",vol:"~30,000",beds:928,wprs:94,type:"Children's Hospital within Medical Center",
+   note:"Most comprehensive pediatric ER in NoVA. Level I Trauma Center. 175K+ total ED visits.",
+   src:"Inova Newsroom Nov 2024; GWU SMHS"},
+  {name:"Inova Loudoun Hospital",short:"Inova Loudoun",lat:39.1077,lng:-77.5580,
+   tier:"medhigh",vol:"~8,000",beds:340,wprs:79,type:"Community Hospital",
+   note:"Only dedicated pediatric ED in Loudoun County. Air transport available.",
+   src:"Inova Children's"},
+  {name:"Inova Alexandria Hospital",short:"Inova Alexandria",lat:38.8165,lng:-77.0855,
+   tier:"med",vol:"~4,500",beds:334,wprs:70,type:"Community Hospital",
+   note:"Full-service ED with pediatric capability in Alexandria.",
+   src:"Inova Health System"},
+  {name:"Inova Fair Oaks Hospital",short:"Inova Fair Oaks",lat:38.8609,lng:-77.3590,
+   tier:"med",vol:"~3,000",beds:201,wprs:67,type:"Community Hospital",
+   note:"Community hospital serving western Fairfax County.",
+   src:"Inova Health System"},
+  {name:"Virginia Hospital Center",short:"VA Hosp Center",lat:38.8875,lng:-77.1064,
+   tier:"medhigh",vol:"~6,000",beds:395,wprs:76,type:"Community Hospital",
+   note:"Independent community hospital in Arlington. Dedicated pediatric ED area.",
+   src:"Virginia Hospital Center"},
+  {name:"Sentara Northern Virginia Medical Center",short:"Sentara NoVA",lat:38.7396,lng:-77.4780,
+   tier:"med",vol:"~2,500",beds:183,wprs:65,type:"Community Hospital",
+   note:"Serves Prince William County / Woodbridge area.",
+   src:"Sentara Health"},
+  {name:"Novant Health UVA Prince William Medical Center",short:"Novant PW",lat:38.7558,lng:-77.4661,
+   tier:"med",vol:"~3,000",beds:126,wprs:66,type:"Community Hospital",
+   note:"Community hospital in Manassas serving western Prince William.",
+   src:"Novant Health"},
+  {name:"Spotsylvania Regional Medical Center",short:"Spotsylvania MC",lat:38.2460,lng:-77.5225,
+   tier:"med",vol:"~2,000",beds:133,wprs:62,type:"Community Hospital",
+   note:"Serves Spotsylvania / Fredericksburg corridor.",
+   src:"HCA Virginia"},
+  {name:"Mary Washington Hospital",short:"Mary Washington",lat:38.2940,lng:-77.4890,
+   tier:"medhigh",vol:"~5,500",beds:471,wprs:77,type:"Regional Medical Center",
+   note:"Largest hospital in Fredericksburg region. Pediatric hospitalists on staff.",
+   src:"Mary Washington Healthcare"},
+
+  // Maryland
+  {name:"Adventist HealthCare Shady Grove Medical Center",short:"Shady Grove",lat:39.1495,lng:-77.1975,
+   tier:"high",vol:"~15,000",beds:315,wprs:88,type:"Community Medical Center",
+   note:"First and largest dedicated pediatric ED in Montgomery County.",
+   src:"Adventist HealthCare"},
+  {name:"Holy Cross Hospital",short:"Holy Cross",lat:39.0152,lng:-77.0415,
+   tier:"medhigh",vol:"~9,000",beds:449,wprs:80,type:"Community Hospital",
+   note:"Silver Spring. One of the busiest EDs in Montgomery County.",
+   src:"Holy Cross Health"},
+  {name:"Suburban Hospital (Johns Hopkins)",short:"Suburban",lat:38.9987,lng:-77.1016,
+   tier:"medhigh",vol:"~5,000",beds:238,wprs:76,type:"Community Hospital",
+   note:"Johns Hopkins Medicine affiliate in Bethesda.",
+   src:"Johns Hopkins Medicine"},
+  {name:"MedStar Montgomery Medical Center",short:"MedStar Mntgmry",lat:39.1515,lng:-77.0625,
+   tier:"med",vol:"~3,500",beds:138,wprs:67,type:"Community Hospital",
+   note:"Olney. Community hospital serving upper Montgomery County.",
+   src:"MedStar Health"},
+  {name:"University of Maryland Prince George's Hospital Center",short:"UM PGHC",lat:38.9370,lng:-76.9018,
+   tier:"medhigh",vol:"~8,000",beds:206,wprs:78,type:"Regional Medical Center",
+   note:"Cheverly. Only hospital in Prince George's County with designated trauma services.",
+   src:"University of Maryland Medical System"},
+  {name:"MedStar Southern Maryland Hospital Center",short:"MedStar So MD",lat:38.7505,lng:-76.8982,
+   tier:"med",vol:"~4,000",beds:189,wprs:66,type:"Community Hospital",
+   note:"Clinton. Full-service community hospital serving southern PG County.",
+   src:"MedStar Health"},
+  {name:"University of Maryland Charles Regional Medical Center",short:"UM Charles Reg",lat:38.5870,lng:-76.9390,
+   tier:"med",vol:"~2,500",beds:110,wprs:63,type:"Community Hospital",
+   note:"La Plata. Serving Charles County.",
+   src:"University of Maryland Medical System"},
+  {name:"CalvertHealth Medical Center",short:"CalvertHealth",lat:38.5344,lng:-76.5357,
+   tier:"med",vol:"~2,000",beds:73,wprs:58,type:"Community Hospital",
+   note:"Prince Frederick. Sole hospital in Calvert County.",
+   src:"CalvertHealth"},
+  {name:"MedStar St. Mary's Hospital",short:"MedStar St Mary's",lat:38.2724,lng:-76.4900,
+   tier:"med",vol:"~1,800",beds:104,wprs:57,type:"Community Hospital",
+   note:"Leonardtown. Serves St. Mary's County.",
+   src:"MedStar Health"},
+  {name:"Anne Arundel Medical Center (Luminis Health)",short:"AAMC",lat:38.9865,lng:-76.5060,
+   tier:"medhigh",vol:"~9,000",beds:385,wprs:81,type:"Regional Medical Center",
+   note:"Annapolis. Major pediatric ED for Anne Arundel County. Pediatric hospitalists.",
+   src:"Luminis Health"},
+  {name:"Howard County General Hospital (Johns Hopkins)",short:"Howard Co Gen",lat:39.2018,lng:-76.8655,
+   tier:"medhigh",vol:"~7,000",beds:266,wprs:78,type:"Community Hospital",
+   note:"Columbia. Johns Hopkins affiliate serving Howard County.",
+   src:"Johns Hopkins Medicine"},
+  {name:"Frederick Health Hospital",short:"Frederick Health",lat:39.4040,lng:-77.4127,
+   tier:"medhigh",vol:"~6,000",beds:275,wprs:76,type:"Regional Medical Center",
+   note:"Frederick. Largest hospital in Frederick County.",
+   src:"Frederick Health"},
+  {name:"Meritus Medical Center",short:"Meritus",lat:39.6260,lng:-77.7340,
+   tier:"med",vol:"~3,500",beds:267,wprs:68,type:"Community Hospital",cah:false,
+   note:"Hagerstown. Primary hospital for Washington County MD.",
+   src:"Meritus Health"},
+
+  // Critical Access Hospitals (CAH) — nearest to DMV, rural VA
+  // Per 42 CFR §485 Subpart F: ≤25 beds, avg LOS ≤96hrs, rural, >35mi from nearest hospital
+  // Note: MD, DC have NO CAHs (MD has no State Flex Program per CMS)
+  {name:"Page Memorial Hospital",short:"Page Memorial",lat:38.6592,lng:-78.6348,
+   tier:"low",vol:"~800",beds:25,wprs:52,type:"Critical Access Hospital",cah:true,
+   note:"Luray, VA. CAH per 42 CFR §485 Subpart F. 25-bed rural hospital serving Page County in the Shenandoah Valley.",
+   src:"Valley Health System; CMS CAH certification"},
+  {name:"Bath Community Hospital",short:"Bath Community",lat:38.0808,lng:-79.8323,
+   tier:"low",vol:"~600",beds:25,wprs:48,type:"Critical Access Hospital",cah:true,
+   note:"Hot Springs, VA. CAH per 42 CFR §485 Subpart F. One of VA's most remote hospitals, serving Bath County.",
+   src:"Bath Community Hospital; CMS CAH certification"},
+];
+
+// ═══════════════════════════════════════════════════════════════
+// ALABAMA DATA
+// ═══════════════════════════════════════════════════════════════
+const C_AL = [
+  {id:"01073",nm:"Jefferson",short:"JEFFERSON",st:"AL",lat:33.5504,lng:-86.8150,pop:660,
+   poly:[[33.75,-87.08],[33.75,-86.58],[33.61,-86.52],[33.38,-86.52],[33.31,-86.58],[33.31,-87.08],[33.45,-87.12]]},
+  {id:"01089",nm:"Madison",short:"MADISON",st:"AL",lat:34.7304,lng:-86.5861,pop:395,
+   poly:[[34.99,-86.79],[34.99,-86.32],[34.85,-86.30],[34.60,-86.32],[34.55,-86.50],[34.55,-86.79]]},
+  {id:"01097",nm:"Mobile",short:"MOBILE",st:"AL",lat:30.6944,lng:-88.0431,pop:414,
+   poly:[[31.08,-88.35],[31.08,-87.92],[30.94,-87.70],[30.50,-87.70],[30.22,-88.02],[30.22,-88.35],[30.60,-88.42]]},
+  {id:"01101",nm:"Montgomery",short:"MNTGMRY",st:"AL",lat:32.3792,lng:-86.3077,pop:228,
+   poly:[[32.61,-86.50],[32.61,-86.05],[32.45,-85.99],[32.15,-86.02],[32.13,-86.30],[32.13,-86.50],[32.35,-86.55]]},
+  {id:"01125",nm:"Tuscaloosa",short:"TUSCALOOSA",st:"AL",lat:33.2098,lng:-87.5691,pop:227,
+   poly:[[33.49,-87.84],[33.49,-87.30],[33.30,-87.22],[33.02,-87.22],[32.93,-87.42],[32.93,-87.84],[33.15,-87.88]]},
+  {id:"01003",nm:"Baldwin",short:"BALDWIN",st:"AL",lat:30.6590,lng:-87.7499,pop:231,
+   poly:[[31.00,-87.92],[31.00,-87.52],[30.75,-87.42],[30.22,-87.52],[30.22,-87.85],[30.60,-87.98]]},
+  {id:"01117",nm:"Shelby",short:"SHELBY",st:"AL",lat:33.2601,lng:-86.6683,pop:223,
+   poly:[[33.42,-86.88],[33.42,-86.50],[33.28,-86.45],[33.11,-86.48],[33.06,-86.68],[33.06,-86.88]]},
+  {id:"01081",nm:"Lee",short:"LEE",st:"AL",lat:32.5987,lng:-85.3553,pop:174,
+   poly:[[32.75,-85.54],[32.75,-85.18],[32.62,-85.13],[32.43,-85.15],[32.40,-85.35],[32.40,-85.54]]},
+  {id:"01103",nm:"Morgan",short:"MORGAN",st:"AL",lat:34.4530,lng:-86.8884,pop:120,
+   poly:[[34.60,-87.11],[34.60,-86.65],[34.50,-86.60],[34.32,-86.60],[34.30,-86.80],[34.30,-87.11]]},
+  {id:"01049",nm:"DeKalb",short:"DEKALB",st:"AL",lat:34.4609,lng:-85.8040,pop:72,
+   poly:[[34.60,-85.98],[34.60,-85.60],[34.50,-85.55],[34.32,-85.56],[34.30,-85.78],[34.30,-85.98]]},
+  {id:"01015",nm:"Calhoun",short:"CALHOUN",st:"AL",lat:33.7714,lng:-85.8260,pop:113,
+   poly:[[33.92,-86.00],[33.92,-85.65],[33.80,-85.60],[33.63,-85.62],[33.60,-85.82],[33.60,-86.00]]},
+  {id:"01055",nm:"Etowah",short:"ETOWAH",st:"AL",lat:34.0254,lng:-86.0383,pop:103,
+   poly:[[34.18,-86.22],[34.18,-85.85],[34.08,-85.82],[33.88,-85.84],[33.86,-86.05],[33.86,-86.22]]},
+  {id:"01069",nm:"Houston",short:"HOUSTON",st:"AL",lat:31.1533,lng:-85.3055,pop:106,
+   poly:[[31.35,-85.50],[31.35,-85.10],[31.20,-85.00],[31.00,-85.00],[31.00,-85.28],[31.00,-85.50]]},
+  {id:"01077",nm:"Lauderdale",short:"LAUDERDALE",st:"AL",lat:34.9000,lng:-87.6500,pop:93,
+   poly:[[34.99,-87.85],[34.99,-87.45],[34.88,-87.40],[34.78,-87.42],[34.76,-87.62],[34.76,-87.85]]},
+  {id:"01083",nm:"Limestone",short:"LIMESTONE",st:"AL",lat:34.8100,lng:-86.9700,pop:100,
+   poly:[[34.99,-87.11],[34.99,-86.78],[34.88,-86.73],[34.70,-86.75],[34.68,-86.95],[34.68,-87.11]]},
+  {id:"01121",nm:"Talladega",short:"TALLADEGA",st:"AL",lat:33.3700,lng:-86.1000,pop:79,
+   poly:[[33.55,-86.30],[33.55,-85.90],[33.42,-85.85],[33.21,-85.88],[33.18,-86.10],[33.18,-86.30]]},
+  {id:"01127",nm:"Walker",short:"WALKER",st:"AL",lat:33.8000,lng:-87.3000,pop:63,
+   poly:[[33.98,-87.50],[33.98,-87.10],[33.85,-87.05],[33.65,-87.08],[33.62,-87.28],[33.62,-87.50]]},
+  {id:"01115",nm:"St. Clair",short:"ST CLAIR",st:"AL",lat:33.7200,lng:-86.3200,pop:91,
+   poly:[[33.88,-86.50],[33.88,-86.15],[33.76,-86.10],[33.58,-86.12],[33.55,-86.32],[33.55,-86.50]]},
+];
+
+const STATE_LABELS_AL = [
+  {name:"ALABAMA",lat:32.80,lng:-86.80,size:18},
+];
+
+const HOSPITALS_AL = [
+  {name:"Children's of Alabama",short:"Children's AL",lat:33.5077,lng:-86.8006,
+   tier:"high",vol:"~59,000",beds:332,wprs:96,type:"Freestanding Children's",cah:false,
+   note:"Only Level I Pediatric Trauma Center in Alabama. 53-room ED. Busiest pediatric ED in Southeast.",
+   src:"Children's of Alabama; UAB Pediatrics 2023 data"},
+  {name:"Huntsville Hospital for Women & Children",short:"Huntsville W&C",lat:34.7304,lng:-86.5861,
+   tier:"high",vol:"~25,000",beds:150,wprs:91,type:"Women's & Children's Hospital",cah:false,
+   note:"Part of Huntsville Hospital System. Serves North Alabama/Tennessee Valley.",
+   src:"Huntsville Hospital System"},
+  {name:"USA Health Children's & Women's Hospital",short:"USA Children's",lat:30.6944,lng:-88.0860,
+   tier:"high",vol:"~18,000",beds:96,wprs:89,type:"Children's Hospital",cah:false,
+   note:"Mobile. Academic children's hospital, only Level II pediatric trauma center on Gulf Coast.",
+   src:"USA Health; U of South Alabama"},
+  {name:"Baptist Medical Center South",short:"Baptist South",lat:32.3460,lng:-86.2870,
+   tier:"medhigh",vol:"~8,000",beds:402,wprs:78,type:"Regional Medical Center",cah:false,
+   note:"Montgomery. Largest hospital in the River Region. Pediatric ED unit.",
+   src:"Baptist Health"},
+  {name:"DCH Regional Medical Center",short:"DCH Regional",lat:33.2098,lng:-87.5425,
+   tier:"medhigh",vol:"~6,000",beds:583,wprs:76,type:"Regional Medical Center",cah:false,
+   note:"Tuscaloosa. Major referral center for western Alabama.",
+   src:"DCH Health System"},
+  {name:"Gadsden Regional Medical Center",short:"Gadsden Reg",lat:34.0100,lng:-86.0060,
+   tier:"med",vol:"~3,500",beds:346,wprs:68,type:"Community Hospital",cah:false,
+   note:"Etowah County. Serves northeast Alabama corridor.",
+   src:"Gadsden Regional"},
+  {name:"Southeast Health Medical Center",short:"Southeast Health",lat:31.2220,lng:-85.3900,
+   tier:"med",vol:"~4,000",beds:420,wprs:70,type:"Regional Medical Center",cah:false,
+   note:"Dothan. Wiregrass region's largest medical center.",
+   src:"Southeast Health"},
+  {name:"Decatur Morgan Hospital",short:"Decatur Morgan",lat:34.6059,lng:-86.9833,
+   tier:"med",vol:"~2,500",beds:120,wprs:65,type:"Community Hospital",cah:false,
+   note:"Decatur. Serves Morgan County / Decatur metro.",
+   src:"Decatur Morgan Hospital"},
+  {name:"North Alabama Medical Center",short:"N AL Medical",lat:34.7580,lng:-87.6880,
+   tier:"med",vol:"~2,200",beds:263,wprs:66,type:"Community Hospital",cah:false,
+   note:"Florence. Serves Shoals region (Lauderdale/Colbert counties).",
+   src:"North Alabama Medical Center"},
+  // Alabama CAH examples
+  {name:"Lakeland Community Hospital",short:"Lakeland CH",lat:31.4140,lng:-86.6200,
+   tier:"low",vol:"~400",beds:24,wprs:50,type:"Critical Access Hospital",cah:true,
+   note:"Haleyville, AL. CAH per 42 CFR §485 Subpart F. Rural hospital serving Winston County.",
+   src:"CMS CAH certification; Lakeland Community Hospital"},
+  {name:"Bullock County Hospital",short:"Bullock Co",lat:32.0950,lng:-85.7150,
+   tier:"low",vol:"~350",beds:25,wprs:47,type:"Critical Access Hospital",cah:true,
+   note:"Union Springs, AL. CAH per 42 CFR §485 Subpart F. Sole hospital in Bullock County.",
+   src:"CMS CAH certification; Bullock County Hospital"},
+];
+
+const AL_PROFILES = {
+  Flood:{"01073":55,"01089":40,"01097":82,"01101":60,"01125":45,"01003":78,"01117":35,"01081":38,"01103":50,"01049":42,"01015":35,"01055":40,"01069":52,"01077":48,"01083":42,"01121":30,"01127":28,"01115":32},
+  Hurricane:{"01073":20,"01089":10,"01097":85,"01101":30,"01125":15,"01003":88,"01117":18,"01081":15,"01103":12,"01049":8,"01015":10,"01055":8,"01069":42,"01077":8,"01083":10,"01121":10,"01127":8,"01115":10},
+  "Winter Storm":{"01073":40,"01089":55,"01097":15,"01101":30,"01125":38,"01003":12,"01117":35,"01081":32,"01103":52,"01049":58,"01015":45,"01055":50,"01069":18,"01077":55,"01083":52,"01121":42,"01127":45,"01115":38},
+  Tornado:{"01073":78,"01089":72,"01097":55,"01101":68,"01125":80,"01003":50,"01117":65,"01081":60,"01103":70,"01049":62,"01015":72,"01055":75,"01069":58,"01077":65,"01083":68,"01121":70,"01127":72,"01115":68},
+  Earthquake:{"01073":12,"01089":10,"01097":8,"01101":10,"01125":12,"01003":6,"01117":10,"01081":8,"01103":10,"01049":8,"01015":10,"01055":8,"01069":6,"01077":8,"01083":10,"01121":8,"01127":8,"01115":8},
+};
+
+// ═══════════════════════════════════════════════════════════════
+// Risk profiles (DMV)
+// ═══════════════════════════════════════════════════════════════
+const PROFILES = {
+  Flood:{"11001":55,"24033":72,"24017":80,"24009":68,"24037":75,"24003":62,"24031":50,"24021":48,"24027":45,"24005":40,"24510":52,"24025":38,"24013":30,"24043":42,"24035":58,"51059":48,"51013":42,"51510":55,"51610":35,"51107":38,"51153":52,"51179":60,"51061":35,"51177":58,"51630":65,"51043":28,"51187":32,"51047":40,"51157":25,"51683":42},
+  Hurricane:{"24037":82,"24009":78,"24017":72,"24033":60,"24003":70,"24035":68,"24005":35,"24510":38,"24025":32,"11001":45,"24031":35,"24027":30,"24021":18,"24013":15,"24043":12,"51510":48,"51013":40,"51059":35,"51610":32,"51153":30,"51179":38,"51107":15,"51061":12,"51177":25,"51630":28,"51683":22,"51043":8,"51187":10,"51047":15,"51157":10},
+  "Winter Storm":{"24021":85,"24013":82,"24043":88,"51043":80,"51187":78,"51157":75,"51061":72,"51107":70,"51047":74,"24027":65,"24031":60,"24005":62,"24510":55,"24025":68,"24033":48,"11001":50,"51059":55,"51013":48,"51610":50,"51153":52,"51179":55,"51177":58,"51630":55,"24003":45,"24017":42,"24009":40,"24037":35,"24035":50,"51510":45,"51683":52},
+  Tornado:{"24017":65,"24037":58,"24009":60,"24033":55,"51179":62,"51177":58,"51630":55,"51047":52,"51153":50,"51061":48,"24003":45,"24035":52,"24027":38,"24031":35,"24021":40,"24013":42,"24005":35,"24510":30,"24025":38,"24043":45,"11001":30,"51059":35,"51013":28,"51510":25,"51610":22,"51107":40,"51043":38,"51187":42,"51157":45,"51683":42},
+  Earthquake:{"51047":45,"51061":42,"51157":48,"51043":40,"51187":38,"51107":35,"24021":35,"24043":38,"51177":40,"51630":38,"51153":30,"51179":32,"51059":28,"51013":25,"24031":25,"24027":22,"11001":22,"24033":20,"24017":18,"24005":18,"24510":18,"24003":15,"24013":28,"24025":15,"24009":15,"24037":12,"24035":12,"51510":22,"51610":24,"51683":28},
+};
+
+const SM={Flood:{Spring:1,Summer:.7,Fall:.5,Winter:.3},Hurricane:{Spring:.2,Summer:.75,Fall:1,Winter:.1},"Winter Storm":{Spring:.3,Summer:.05,Fall:.4,Winter:1},Tornado:{Spring:1,Summer:.7,Fall:.4,Winter:.15},Earthquake:{Spring:.7,Summer:.7,Fall:.7,Winter:.7}};
+const HM={"30 days":1,"90 days":.85,"6 months":.7,"1 year":.55};
+
+function rc(s){return s>=70?"#c0392b":s>=50?"#e67e22":s>=30?"#eab308":s>=15?"#84cc16":"#22c55e"}
+function rl(s){return s>=70?"Critical":s>=50?"High":s>=30?"Moderate":s>=15?"Low":"Minimal"}
+function rb(s){return s>=70?"#3b1010":s>=50?"#3b2010":s>=30?"#3b3010":s>=15?"#1a3010":"#103020"}
+
+function calc(type,sev,hor,sea){
+  const allProfiles = cRegion==="alabama" ? AL_PROFILES : PROFILES;
+  const counties = cRegion==="alabama" ? C_AL : C;
+  const p=allProfiles[type]||{};
+  const sm=(SM[type]||{})[sea]||.5;
+  const hm=HM[hor]||.7;
+  const sv=sev/3;
+  const o={};
+  counties.forEach(c=>{
+    const b=p[c.id]||15;
+    let sc=b*sm*hm*sv;
+    sc=Math.min(100,Math.max(0,sc+(Math.random()*6-3)));
+    o[c.id]=Math.round(sc*10)/10;
+  });
+  return o;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// Telehealth utilization data (per county)
+// Based on CMS Medicare Telehealth Trends Report (Q4 2024)
+// State-level rates from CMS, county estimates adjusted for
+// urban/rural setting and population density.
+// Source: data.cms.gov/medicare-telehealth-trends
+// ═══════════════════════════════════════════════════════════════
+// Format: {county_fips: utilization_rate_%}
+// Rate = % Medicare FFS beneficiaries with ≥1 telehealth service/quarter
+const TELE_DMV = {
+  // DC - high urban, high adoption
+  "11001":46.2,
+  // Maryland
+  "24031":42.5,"24033":38.8,"24003":33.1,"24027":40.2,"24021":28.5,
+  "24017":26.3,"24009":22.8,"24037":21.4,"24005":35.6,"24510":41.3,
+  "24013":25.7,"24025":30.2,"24043":24.1,"24035":20.5,
+  // Virginia
+  "51059":43.8,"51013":45.1,"51107":39.4,"51153":34.7,"51179":29.8,
+  "51061":22.3,"51177":25.6,"51043":19.8,"51187":18.5,"51047":20.1,
+  "51157":16.9,"51510":44.5,"51610":43.2,"51683":31.5,"51630":27.4,
+};
+
+const TELE_AL = {
+  "01073":36.8, // Jefferson (Birmingham) - urban
+  "01089":33.5, // Madison (Huntsville)
+  "01097":28.4, // Mobile
+  "01101":30.2, // Montgomery
+  "01125":31.5, // Tuscaloosa
+  "01003":24.6, // Baldwin
+  "01117":29.8, // Shelby
+  "01081":27.3, // Lee (Auburn)
+  "01103":25.1, // Morgan
+  "01049":18.7, // DeKalb - rural
+  "01015":23.4, // Calhoun
+  "01055":22.8, // Etowah
+  "01069":21.5, // Houston
+  "01077":20.3, // Lauderdale
+  "01083":24.2, // Limestone
+  "01121":19.6, // Talladega
+  "01127":17.2, // Walker - rural
+  "01115":22.1, // St. Clair
+};
+
+function teleColor(rate){
+  if(rate>=40) return '#93c5fd';
+  if(rate>=32) return '#60a5fa';
+  if(rate>=25) return '#2563eb';
+  return '#1e3a5f';
+}
+function teleLabel(rate){
+  if(rate>=40) return 'High';
+  if(rate>=32) return 'Moderate';
+  if(rate>=25) return 'Below Avg';
+  return 'Low';
+}
+
+let cType="Flood",cSev=3,cHor="90 days",cSea="Spring",cRegion="dmv";
+let map,polyLayer,markerLayer,labelLayer,hospLayer,teleLayer;
+
+function initMap(){
+  map=L.map('map',{zoomControl:true}).setView([38.95,-77.25],9);
+
+  // OpenStreetMap tiles (most reliable)
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  // Ensure map renders after layout
+  setTimeout(function(){ map.invalidateSize(); }, 100);
+  setTimeout(function(){ map.invalidateSize(); }, 500);
+
+  polyLayer=L.layerGroup().addTo(map);
+  markerLayer=L.layerGroup().addTo(map);
+  labelLayer=L.layerGroup().addTo(map);
+  hospLayer=L.layerGroup().addTo(map);
+  teleLayer=L.layerGroup().addTo(map);
+
+  render();
+}
+
+function render(){
+  polyLayer.clearLayers();
+  markerLayer.clearLayers();
+  labelLayer.clearLayers();
+  hospLayer.clearLayers();
+  teleLayer.clearLayers();
+
+  const counties = cRegion==="alabama" ? C_AL : C;
+  const stateLabels = cRegion==="alabama" ? STATE_LABELS_AL : STATE_LABELS;
+  const risks=calc(cType,cSev,cHor,cSea);
+  document.getElementById('countBadge').textContent=counties.length+' COUNTIES';
+
+  // Set map view for region
+  if(cRegion==="alabama"){
+    map.setView([33.0,-86.8],7);
+  } else {
+    map.setView([38.95,-77.25],9);
+  }
+
+  // Draw county boundary polygons
+  counties.forEach(c=>{
+    const score=risks[c.id]||0;
+    const latlngs=c.poly.map(p=>[p[0],p[1]]);
+
+    const poly=L.polygon(latlngs,{
+      color:"#555",
+      weight:1.2,
+      dashArray:"6 4",
+      opacity:0.6,
+      fillColor:rc(score),
+      fillOpacity:0.12,
+    }).addTo(polyLayer);
+
+    const displayName=c.nm.replace(/\n/g,' ');
+    const sub=`${c.st} · Pop ${c.pop.toLocaleString()}K`;
+
+    poly.bindTooltip(
+      `<div class="tn">${displayName}</div>`+
+      `<div class="ts">${sub}</div>`+
+      `<span class="tv" style="color:${rc(score)}">${score.toFixed(1)}</span>`+
+      `<span class="tl" style="color:${rc(score)}">${rl(score)}</span>`,
+      {className:'risk-tip',sticky:true,direction:'top',offset:[0,-12]}
+    );
+
+    poly.on('mouseover',function(){
+      this.setStyle({fillOpacity:0.35,weight:2,color:'#333',dashArray:''});
+      this.bringToFront();
+      showHP(c,score);
+    });
+    poly.on('mouseout',function(){
+      this.setStyle({fillOpacity:0.12,weight:1.2,color:'#555',dashArray:'6 4'});
+      hideHP();
+    });
+  });
+
+  // Draw risk circle markers at county centroids
+  counties.forEach(c=>{
+    const score=risks[c.id]||0;
+    const radius=Math.max(6, Math.min(18, score/5));
+
+    const marker=L.circleMarker([c.lat,c.lng],{
+      radius:radius,
+      fillColor:rc(score),
+      fillOpacity:0.7,
+      color:'rgba(0,0,0,0.25)',
+      weight:1.5,
+    }).addTo(markerLayer);
+
+    // Score label inside circle for larger markers
+    if(radius >= 8){
+      const scoreLbl = L.marker([c.lat,c.lng],{
+        icon:L.divIcon({
+          className:'county-label-small',
+          html:`<span style="color:#222;font-size:8px;font-weight:700;font-family:'JetBrains Mono',monospace">${Math.round(score)}</span>`,
+          iconSize:[30,14],
+          iconAnchor:[15,7],
+        }),
+        interactive:false,
+      }).addTo(markerLayer);
+    }
+  });
+
+  // County name labels
+  counties.forEach(c=>{
+    const lines = c.nm.split('\n');
+    const isSmall = c.pop < 50;
+    const offsetY = lines.length > 1 ? -22 : -16;
+
+    const lbl=L.marker([c.lat,c.lng],{
+      icon:L.divIcon({
+        className: isSmall ? 'county-label-small' : 'county-label',
+        html: lines.map(l=>`<div style="line-height:1.2">${l}</div>`).join(''),
+        iconSize:[120,40],
+        iconAnchor:[60, -offsetY],
+      }),
+      interactive:false,
+    }).addTo(labelLayer);
+  });
+
+  // State labels (large, faint)
+  stateLabels.forEach(s=>{
+    const lines=s.name.split('\n');
+    L.marker([s.lat,s.lng],{
+      icon:L.divIcon({
+        className:'state-label',
+        html:lines.map(l=>`<div style="font-size:${s.size}px;line-height:1.15">${l}</div>`).join(''),
+        iconSize:[200,50],
+        iconAnchor:[100,25],
+      }),
+      interactive:false,
+    }).addTo(labelLayer);
+  });
+
+  updateKPIs(risks);
+  renderHospitals();
+  renderTelehealth();
+}
+
+function renderHospitals(){
+  hospLayer.clearLayers();
+  if(!document.getElementById('hospToggle').checked) return;
+  const hospitals = cRegion==="alabama" ? HOSPITALS_AL : HOSPITALS;
+
+  const tierConfig = {
+    high:    {color:'#7c3aed',size:14,label:'H'},   // ≥10,000/yr
+    medhigh: {color:'#a78bfa',size:11,label:'MH'},   // 5,000-9,999
+    med:     {color:'#c4b5fd',size:9,label:'M'},      // 1,800-4,999
+    low:     {color:'#ddd6fe',size:7,label:'L'},      // <1,800
+  };
+
+  hospitals.forEach(h=>{
+    const cfg=tierConfig[h.tier];
+
+    // Build tooltip HTML
+    const tierLabels = {high:'High (≥10,000/yr)',medhigh:'Med-High (5,000–9,999/yr)',med:'Medium (1,800–4,999/yr)',low:'Low (<1,800/yr)'};
+    const tierLabel = tierLabels[h.tier]||h.tier;
+    const cahNote = h.cah ? '<div style="color:#f59e0b;font-size:10px;font-weight:600;margin-top:3px">⬡ Critical Access Hospital (CAH)<br><span style="font-weight:400;color:#bbb">Per CMS 42 CFR §485 Subpart F: ≤25 beds, avg LOS ≤96hrs, rural, 24/7 emergency services, >35mi from nearest hospital</span></div>' : '';
+    const wprsVal = h.wprs || 0;
+    const wprsColor = wprsVal >= 87 ? '#22c55e' : wprsVal >= 70 ? '#eab308' : '#c0392b';
+    const wprsLabel = wprsVal >= 87 ? 'High Readiness' : wprsVal >= 70 ? 'Moderate' : 'Low Readiness';
+    const wprsBar = `<div style="margin-top:5px;margin-bottom:4px">` +
+      `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">` +
+      `<span style="font-size:10px;color:#aaa;font-weight:500">NPRP Readiness (WPRS)</span>` +
+      `<span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:${wprsColor}">${wprsVal}</span>` +
+      `<span style="font-size:9px;color:${wprsColor};font-weight:600">${wprsLabel}</span></div>` +
+      `<div style="height:5px;border-radius:3px;background:#333;overflow:hidden">` +
+      `<div style="height:100%;width:${wprsVal}%;border-radius:3px;background:${wprsColor}"></div></div></div>`;
+    const tooltipHtml =
+      `<div class="hn">${h.name}</div>`+
+      `<div class="hs">${h.type} · ${h.beds} beds</div>`+
+      `<div class="hv">Pediatric ED Volume: ${h.vol} — ${tierLabel}</div>`+
+      wprsBar+
+      cahNote+
+      `<div class="hd">${h.note}</div>`+
+      `<div style="color:#666;font-size:8.5px;margin-top:4px;font-style:italic">Source: ${h.src}</div>`;
+
+    // Marker: hexagon for CAH, circle for others
+    if(h.cah){
+      const sz=cfg.size+4;
+      const hexSvg=`<svg width="${sz*2+4}" height="${sz*2+4}" viewBox="0 0 ${sz*2+4} ${sz*2+4}" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="${Array.from({length:6},(_,i)=>{const a=Math.PI/3*i-Math.PI/6;return `${sz+2+sz*Math.cos(a)},${sz+2+sz*Math.sin(a)}`}).join(' ')}"
+          fill="${cfg.color}" stroke="#f59e0b" stroke-width="2.5" opacity="0.9"/>
+        <text x="${sz+2}" y="${sz+6}" text-anchor="middle" fill="#fff" font-size="8" font-weight="700" font-family="JetBrains Mono,monospace">CAH</text>
+      </svg>`;
+      L.marker([h.lat,h.lng],{icon:L.divIcon({html:hexSvg,className:'',iconSize:[sz*2+4,sz*2+4],iconAnchor:[sz+2,sz+2]})})
+        .addTo(hospLayer).bindTooltip(tooltipHtml,{className:'hosp-tip',sticky:true,direction:'top',offset:[0,-sz-6]});
+    } else {
+      L.circleMarker([h.lat,h.lng],{radius:cfg.size,fillColor:cfg.color,fillOpacity:0.85,color:'#fff',weight:2,pane:'markerPane'})
+        .addTo(hospLayer).bindTooltip(tooltipHtml,{className:'hosp-tip',sticky:true,direction:'top',offset:[0,-cfg.size-4]});
+    }
+
+    // Name label below marker
+    L.marker([h.lat,h.lng],{
+      icon:L.divIcon({
+        className:'hosp-label',
+        html:`<div style="text-align:center">${h.short}</div>`,
+        iconSize:[90,14],
+        iconAnchor:[45,-cfg.size-2],
+      }),
+      interactive:false,
+    }).addTo(hospLayer);
+  });
+}
+
+function renderTelehealth(){
+  teleLayer.clearLayers();
+  if(!document.getElementById('teleToggle').checked) return;
+
+  const counties = cRegion==="alabama" ? C_AL : C;
+  const teleData = cRegion==="alabama" ? TELE_AL : TELE_DMV;
+
+  counties.forEach(c=>{
+    const rate = teleData[c.id];
+    if(rate===undefined) return;
+
+    const latlngs=c.poly.map(p=>[p[0],p[1]]);
+    const poly=L.polygon(latlngs,{
+      color:teleColor(rate),
+      weight:2,
+      opacity:0.8,
+      fillColor:teleColor(rate),
+      fillOpacity:0.35,
+      pane:'overlayPane',
+    }).addTo(teleLayer);
+
+    const displayName=c.nm.replace(/\n/g,' ');
+    poly.bindTooltip(
+      `<div class="tn">${displayName}</div>`+
+      `<div class="ts" style="color:#60a5fa">${c.st} · Medicare Telehealth</div>`+
+      `<div style="display:flex;align-items:baseline;gap:8px;margin:4px 0">`+
+        `<span class="tv" style="color:${teleColor(rate)}">${rate.toFixed(1)}%</span>`+
+        `<span class="tl" style="color:${teleColor(rate)}">${teleLabel(rate)} Utilization</span>`+
+      `</div>`+
+      `<div style="height:5px;border-radius:3px;background:#333;overflow:hidden;margin-bottom:4px">`+
+        `<div style="height:100%;width:${Math.min(rate/50*100,100)}%;border-radius:3px;background:${teleColor(rate)}"></div>`+
+      `</div>`+
+      `<div style="color:#666;font-size:9px;line-height:1.3">`+
+        `% of Medicare FFS beneficiaries with ≥1<br>telehealth visit per quarter (2024 est.)<br>`+
+        `<span style="font-style:italic">Source: CMS Medicare Telehealth Trends</span></div>`,
+      {className:'risk-tip',sticky:true,direction:'top',offset:[0,-12]}
+    );
+
+    poly.on('mouseover',function(){
+      this.setStyle({fillOpacity:0.55,weight:3});
+      this.bringToFront();
+    });
+    poly.on('mouseout',function(){
+      this.setStyle({fillOpacity:0.35,weight:2});
+    });
+  });
+}
+
+function updateKPIs(risks){
+  const counties = cRegion==="alabama" ? C_AL : C;
+  const sorted=counties.map(c=>({...c,score:risks[c.id]||0})).sort((a,b)=>b.score-a.score);
+  const hi=sorted.filter(c=>c.score>=50).length;
+  const avg=Math.round(sorted.reduce((s,c)=>s+c.score,0)/sorted.length*10)/10;
+  const pop=sorted.filter(c=>c.score>=50).reduce((s,c)=>s+c.pop,0);
+  const top=sorted[0];
+  document.getElementById('k1').innerHTML=`${hi}<span class="kpi-sub">/ ${counties.length}</span>`;
+  document.getElementById('k2').innerHTML=`${avg}<span class="kpi-sub">/ 100</span>`;
+  document.getElementById('k3').innerHTML=pop>=1000?`${(pop/1000).toFixed(1)}M`:`${pop}K`;
+  document.getElementById('k4').innerHTML=`<span style="font-family:'IBM Plex Sans';font-size:13px">${top.nm.replace(/\n/g,' ')}</span><span class="kpi-sub">${top.score.toFixed(1)}</span>`;
+}
+
+function showHP(item,score){
+  const el=document.getElementById('hPanel');
+  el.className='hover-panel';
+  el.style.background=rb(score);
+  el.style.border=`1px solid ${rc(score)}40`;
+  el.innerHTML=
+    `<div class="hp-name">${item.nm.replace(/\n/g,' ')}</div>`+
+    `<div class="hp-sub">${item.st} · Pop ${item.pop.toLocaleString()}K</div>`+
+    `<div class="hp-row"><span class="hp-score" style="color:${rc(score)}">${score.toFixed(1)}</span>`+
+    `<span class="hp-badge" style="background:${rc(score)}20;color:${rc(score)};border:1px solid ${rc(score)}40">${rl(score)}</span></div>`;
+}
+function hideHP(){
+  const el=document.getElementById('hPanel');
+  el.className='info-box';el.style.background='';el.style.border='';
+  el.innerHTML='ⓘ Hover over county markers on the map to see risk scores. This is a simulated demo with mock risk data.';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Event wiring
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  if(typeof L==='undefined'){
+    document.getElementById('map').innerHTML='<div style="padding:40px;color:#c0392b;font-size:14px">Error: Map library failed to load. Check your internet connection and reload.</div>';
+    return;
+  }
+  initMap();
+  document.getElementById('inType').addEventListener('change',e=>{cType=e.target.value;render();});
+  document.getElementById('inSev').addEventListener('input',e=>{
+    cSev=+e.target.value;document.getElementById('sevLab').textContent=`Severity — Level ${cSev}`;render();
+  });
+  document.getElementById('inHor').addEventListener('change',e=>{cHor=e.target.value;render();});
+  document.querySelectorAll('.season-btn').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.season-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');cSea=b.dataset.s;render();
+  }));
+  document.getElementById('hospToggle').addEventListener('change',()=>renderHospitals());
+  document.getElementById('teleToggle').addEventListener('change',()=>renderTelehealth());
+  document.querySelectorAll('#regionToggle button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('#regionToggle button').forEach(x=>{x.classList.remove('active');x.style.background='transparent';x.style.color='#888';});
+    b.classList.add('active');b.style.background='#c9a96e';b.style.color='#1b1b1b';
+    cRegion=b.dataset.region;render();
+  }));
+});
+</script>
+</body>
+</html>
